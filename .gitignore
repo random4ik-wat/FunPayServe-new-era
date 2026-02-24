@@ -1,0 +1,11 @@
+node_modules
+data
+settings.txt
+dist
+assets
+build.bat
+build.js
+.id_ed25519
+.id_ed25519.pub
+100_ideas.md
+100_ideas.md.resolved
