@@ -165,6 +165,7 @@ function loadConfig() {
         autoIssueTestCommand: Number(config.get('FunPay', 'autoDeliveryTestCommand')),
         watermark: config.get('FunPay', 'waterMark'),
         watermarkInAutoResponse: Number(config.get('FunPay', 'watermarkInAutoResponse')),
+        customGreetings: Number(config.get('FunPay', 'customGreetings') || 0),
         blacklist: (config.get('FunPay', 'blacklist') || '').split(',').map(s => s.trim()).filter(Boolean),
         telegramBot: Number(config.get('Telegram', 'enabled')),
         telegramToken: config.get('Telegram', 'token'),

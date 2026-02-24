@@ -138,6 +138,23 @@ async function processIncomingMessages(message) {
             newChatUsers.push(message.user);
 
             let msg = settings.greetingMessageText;
+
+            // Кастомные приветствия под товар
+            if (settings.customGreetings) {
+                try {
+                    const greetings = await load('data/configs/greetings.json');
+                    if (greetings && greetings.length) {
+                        const lotMatch = greetings.find(g => g.lotName !== 'default' && message.content?.includes(g.lotName));
+                        const defaultMatch = greetings.find(g => g.lotName === 'default');
+                        if (lotMatch) {
+                            msg = lotMatch.message;
+                        } else if (defaultMatch) {
+                            msg = defaultMatch.message;
+                        }
+                    }
+                } catch (_) { }
+            }
+
             msg = msg.replace('{name}', message.user);
 
             await updateFile(newChatUsers, 'data/other/newChatUsers.json');

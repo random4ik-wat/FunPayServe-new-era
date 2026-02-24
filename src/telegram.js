@@ -88,7 +88,7 @@ class TelegramBot {
                 return;
             }
 
-            if (msg == '🔄 Перезагрузить настройки 🔄') {
+            if (msg == '🔄 Настройки 🔄') {
                 await this.reloadSettings(ctx);
                 return;
             }
@@ -100,6 +100,11 @@ class TelegramBot {
 
             if (msg == '📋 Логи 📋') {
                 await this.sendLogFile(ctx);
+                return;
+            }
+
+            if (msg == '📊 Экспорт CSV 📊') {
+                await this.exportCSV(ctx);
                 return;
             }
 
@@ -206,7 +211,7 @@ class TelegramBot {
             ['🚀 Редактировать автовыдачу 🚀'],
             ['📦 Остатки 📦', '❓ Инфо ❓'],
             ['🤖 AI 🤖', '📋 Логи 📋'],
-            ['🔄 Перезагрузить настройки 🔄']
+            ['📊 Экспорт CSV 📊', '🔄 Настройки 🔄']
         ]);
 
         return keyboard;
@@ -281,7 +286,14 @@ class TelegramBot {
         const deliveredValue = global.deliveryStats ? global.deliveryStats.totalValue : 0;
         const errorCount = global.errorStats ? global.errorStats.count : 0;
 
-        const msg = `🔥 <b>Статус</b> 🔥\n\n🔑 Аккаунт: <code>${global.appData.userName}</code>\n💰 Баланс: <code>${global.appData.balance}</code>\n🛍️ Продажи: <code>${global.appData.sales}</code>\n♻️ Последнее обновление: <code>${lastUpdateTime} назад</code>\n\n🕒 Время работы: <code>${workTime}</code>\n⏲ Всегда онлайн: <code>${alwaysOnline}</code>\n👾 Автоответ: <code>${autoResponse}</code>\n🚀 Автовыдача: <code>${autoIssue}</code>\n🏆 Автоподнятие предложений: <code>${lotsRaise}</code>\n🔨 Автовосстановление предложений: <code>${goodsStateCheck}</code>\n\n📦 Выдано за сессию: <code>${deliveredCount} шт.</code> на <code>${deliveredValue} ₽</code>\n⚠️ Ошибок за сессию: <code>${errorCount}</code>\n\n<i><a href="https://t.me/fplite">FunPayServer</a></i>`;
+        // RAM usage
+        const ramMB = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(1);
+
+        // Комиссия FP (~5%) и чистая прибыль
+        const commission = (deliveredValue * 0.05).toFixed(2);
+        const netProfit = (deliveredValue - commission).toFixed(2);
+
+        const msg = `🔥 <b>Статус</b> 🔥\n\n🔑 Аккаунт: <code>${global.appData.userName}</code>\n💰 Баланс: <code>${global.appData.balance}</code>\n🛍️ Продажи: <code>${global.appData.sales}</code>\n♻️ Последнее обновление: <code>${lastUpdateTime} назад</code>\n\n🕒 Время работы: <code>${workTime}</code>\n⏲ Всегда онлайн: <code>${alwaysOnline}</code>\n👾 Автоответ: <code>${autoResponse}</code>\n🚀 Автовыдача: <code>${autoIssue}</code>\n🏆 Автоподнятие предложений: <code>${lotsRaise}</code>\n🔨 Автовосстановление предложений: <code>${goodsStateCheck}</code>\n\n📦 Выдано за сессию: <code>${deliveredCount} шт.</code> на <code>${deliveredValue} ₽</code>\n💰 Комиссия FP (~5%): <code>${commission} ₽</code>\n💵 Чистая прибыль: <code>${netProfit} ₽</code>\n⚠️ Ошибок за сессию: <code>${errorCount}</code>\n🖥️ RAM: <code>${ramMB} MB</code>\n\n<i><a href="https://t.me/fplite">FunPayServer</a></i>`;
         const params = this.mainKeyboard.reply();
         params.disable_web_page_preview = true;
         ctx.replyWithHTML(msg, params);
@@ -352,6 +364,36 @@ class TelegramBot {
             log('Настройки перезагружены из Telegram.', 'g');
         } catch (err) {
             log(`Ошибка при перезагрузке настроек: ${err}`, 'r');
+            ctx.reply(`❌ Ошибка: ${err}`, this.mainKeyboard.reply());
+        }
+    }
+
+    async exportCSV(ctx) {
+        try {
+            const fs = global.fs_extra;
+            const stats = global.deliveryStats;
+
+            if (!stats || !stats.orders || stats.orders.length === 0) {
+                ctx.reply('📊 Нет данных о продажах за эту сессию.', this.mainKeyboard.reply());
+                return;
+            }
+
+            let csv = 'Покупатель,Товар,Сумма,Дата\n';
+            for (const order of stats.orders) {
+                const buyer = (order.buyer || '').replace(/,/g, ';');
+                const product = (order.product || '').replace(/,/g, ';');
+                csv += `${buyer},${product},${order.value || 0},${order.date || ''}\n`;
+            }
+
+            const csvPath = `${process.cwd()}/data/export_sales.csv`;
+            await fs.writeFile(csvPath, '\uFEFF' + csv); // BOM для Excel
+
+            await ctx.replyWithDocument(
+                { source: csvPath, filename: `sales_${new Date().toISOString().slice(0, 10)}.csv` },
+                { caption: `📊 Экспорт продаж (${stats.orders.length} записей)` }
+            );
+        } catch (err) {
+            log(`Ошибка экспорта CSV: ${err}`, 'r');
             ctx.reply(`❌ Ошибка: ${err}`, this.mainKeyboard.reply());
         }
     }

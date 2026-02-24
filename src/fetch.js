@@ -7,7 +7,9 @@ const log = global.log;
 // CONSTANTS
 const settings = global.settings;
 let retriesErrCounter = 0;
-const FETCH_TIMEOUT_MS = 15000; // 15 секунд таймаут на каждый запрос
+const FETCH_TIMEOUT_MS = 15000;
+const MIN_FETCH_INTERVAL = 1000; // Минимум 1с между запросами (rate limiter)
+let lastFetchTime = 0;
 
 // PROXY
 if (settings.proxy.useProxy == true) {
@@ -49,6 +51,13 @@ export default async function fetch_(url, options, delay = 0, retries = 20) {
 
         // Adding delay
         await sleep(delay);
+
+        // Rate limiter — минимум 1с между запросами
+        const elapsed = Date.now() - lastFetchTime;
+        if (elapsed < MIN_FETCH_INTERVAL) {
+            await sleep(MIN_FETCH_INTERVAL - elapsed);
+        }
+        lastFetchTime = Date.now();
 
         // Making request with timeout
         let res = await fetchWithTimeout(url, options);
