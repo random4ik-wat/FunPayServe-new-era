@@ -13,6 +13,9 @@ const settings = global.settings;
 let goods = await load(goodsfilePath);
 let backupOrders = [];
 
+// Счётчик выданных товаров за сессию
+global.deliveryStats = { count: 0, totalValue: 0 };
+
 async function enableAutoIssue() {
     backupOrders = await getOrders();
 
@@ -51,7 +54,11 @@ async function checkForNewOrders() {
             log(`Новый заказ ${c.yellowBright(order.id)} от покупателя ${c.yellowBright(order.buyerName)} на сумму ${c.yellowBright(order.price)} ₽.`);
 
             for (let i = 0; i < order.count; i++) {
-                await issueGood(order.buyerId, order.buyerName, order.name, 'id');
+                const issueResult = await issueGood(order.buyerId, order.buyerName, order.name, 'id');
+                if (issueResult && issueResult !== 'notInStock') {
+                    global.deliveryStats.count++;
+                    if (!isNaN(order.price)) global.deliveryStats.totalValue += order.price;
+                }
             }
         }
 

@@ -30,19 +30,25 @@ async function processMessages() {
 
             // Commands in file
             for (let i = 0; i < autoRespData.length; i++) {
-                if (autoRespData[i].command && chat.message.toLowerCase() == autoRespData[i].command.toLowerCase()) {
+                const useWatermark = settings.watermarkInAutoResponse;
+
+                // Точное совпадение команды
+                if (autoRespData[i].command && chat.message.trim().toLowerCase() == autoRespData[i].command.toLowerCase()) {
                     log(`Команда: ${c.yellowBright(autoRespData[i].command)} для пользователя ${c.yellowBright(chat.userName)}.`);
-                    let smRes = await sendMessage(chat.node, autoRespData[i].response);
+                    let smRes = await sendMessage(chat.node, autoRespData[i].response, false, useWatermark);
                     if (smRes)
                         log(`Ответ на команду отправлен.`, `g`);
                     break;
                 }
 
-                /*if(autoRespData[i].word && chat.message.toLowerCase().includes(autoRespData[i].word.toLowerCase())) {
+                // Поиск по ключевому слову (частичное совпадение)
+                if (autoRespData[i].word && chat.message.trim().toLowerCase().includes(autoRespData[i].word.toLowerCase())) {
                     log(`Ключевое слово: ${c.yellowBright(autoRespData[i].word)} для пользователя ${c.yellowBright(chat.userName)}.`);
-                    await sendMessage(chat.node, autoRespData[i].response);
+                    let smRes = await sendMessage(chat.node, autoRespData[i].response, false, useWatermark);
+                    if (smRes)
+                        log(`Ответ на ключевое слово отправлен.`, `g`);
                     break;
-                }*/
+                }
             }
 
             // Custom commands
@@ -158,7 +164,7 @@ async function getLastMessageId(senderId) {
     return lastMessageId;
 }
 
-async function sendMessage(node, message, customNode = false) {
+async function sendMessage(node, message, customNode = false, useWatermark = true) {
     if (!message || message == undefined || !node || node == undefined) return;
 
     let result = false;
@@ -182,7 +188,7 @@ async function sendMessage(node, message, customNode = false) {
         }
 
         let reqMessage = message;
-        if (settings.watermark && settings.watermark != '') {
+        if (useWatermark && settings.watermark && settings.watermark != '') {
             reqMessage = `${settings.watermark}\n${message}`;
         }
 

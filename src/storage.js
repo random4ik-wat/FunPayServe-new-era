@@ -164,6 +164,7 @@ function loadConfig() {
         greetingMessageText: replaceAll(config.get('FunPay', 'greetingMessageText'), '\\n', '\n'),
         autoIssueTestCommand: Number(config.get('FunPay', 'autoDeliveryTestCommand')),
         watermark: config.get('FunPay', 'waterMark'),
+        watermarkInAutoResponse: Number(config.get('FunPay', 'watermarkInAutoResponse')),
         telegramBot: Number(config.get('Telegram', 'enabled')),
         telegramToken: config.get('Telegram', 'token'),
         userName: config.get('Telegram', 'userName'),
@@ -175,6 +176,8 @@ function loadConfig() {
         lowStockAlert: Number(config.get('Telegram', 'lowStockAlert')),
         thankYouMessage: Number(config.get('Telegram', 'thankYouMessage')),
         thankYouMessageText: replaceAll(config.get('Telegram', 'thankYouMessageText') || '', '\\n', '\n'),
+        dailyReport: Number(config.get('Telegram', 'dailyReport')),
+        dailyReportHour: Number(config.get('Telegram', 'dailyReportHour')) || 20,
         proxy: {
             useProxy: Number(config.get('Proxy', 'enabled')),
             host: config.get('Proxy', 'host'),

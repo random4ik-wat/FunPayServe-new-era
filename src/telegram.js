@@ -22,6 +22,11 @@ class TelegramBot {
 
         this.bot.launch();
         log(`Управление через telegram бота ${c.yellowBright(this.botInfo.username)} запущено.`, 'g');
+
+        // Запуск ежедневных отчётов
+        if (global.settings.dailyReport) {
+            this.startDailyReportScheduler();
+        }
     }
 
     async setupBot() {
@@ -248,7 +253,10 @@ class TelegramBot {
         const goodsStateCheck = (global.settings.goodsStateCheck) ? 'Вкл' : 'Выкл';
         const autoResponse = (global.settings.autoResponse) ? 'Вкл' : 'Выкл';
 
-        const msg = `🔥 <b>Статус</b> 🔥\n\n🔑 Аккаунт: <code>${global.appData.userName}</code>\n💰 Баланс: <code>${global.appData.balance}</code>\n🛍️ Продажи: <code>${global.appData.sales}</code>\n♻️ Последнее обновление: <code>${lastUpdateTime} назад</code>\n\n🕒 Время работы: <code>${workTime}</code>\n⏲ Всегда онлайн: <code>${alwaysOnline}</code>\n👾 Автоответ: <code>${autoResponse}</code>\n🚀 Автовыдача: <code>${autoIssue}</code>\n🏆 Автоподнятие предложений: <code>${lotsRaise}</code>\n🔨 Автовосстановление предложений: <code>${goodsStateCheck}</code>\n\n<i><a href="https://t.me/fplite">FunPayServer</a></i>`;
+        const deliveredCount = global.deliveryStats ? global.deliveryStats.count : 0;
+        const deliveredValue = global.deliveryStats ? global.deliveryStats.totalValue : 0;
+
+        const msg = `🔥 <b>Статус</b> 🔥\n\n🔑 Аккаунт: <code>${global.appData.userName}</code>\n💰 Баланс: <code>${global.appData.balance}</code>\n🛍️ Продажи: <code>${global.appData.sales}</code>\n♻️ Последнее обновление: <code>${lastUpdateTime} назад</code>\n\n🕒 Время работы: <code>${workTime}</code>\n⏲ Всегда онлайн: <code>${alwaysOnline}</code>\n👾 Автоответ: <code>${autoResponse}</code>\n🚀 Автовыдача: <code>${autoIssue}</code>\n🏆 Автоподнятие предложений: <code>${lotsRaise}</code>\n🔨 Автовосстановление предложений: <code>${goodsStateCheck}</code>\n\n📦 Выдано за сессию: <code>${deliveredCount} шт.</code> на <code>${deliveredValue} ₽</code>\n\n<i><a href="https://t.me/fplite">FunPayServer</a></i>`;
         const params = this.mainKeyboard.reply();
         params.disable_web_page_preview = true;
         ctx.replyWithHTML(msg, params);
@@ -581,6 +589,65 @@ class TelegramBot {
         } catch (err) {
             log(`Ошибка при отправке ответа из Telegram: ${err}`, 'r');
             ctx.reply(`❌ Ошибка: ${err}`, this.mainKeyboard.reply());
+        }
+    }
+
+    startDailyReportScheduler() {
+        const targetHour = global.settings.dailyReportHour || 20;
+
+        const scheduleNext = () => {
+            const now = new Date();
+            const next = new Date();
+            next.setHours(targetHour, 0, 0, 0);
+
+            if (next <= now) {
+                next.setDate(next.getDate() + 1);
+            }
+
+            const msUntil = next.getTime() - now.getTime();
+            log(`📊 Ежедневный отчёт запланирован на ${targetHour}:00 (через ${Math.round(msUntil / 1000 / 60)} мин).`, 'c');
+
+            setTimeout(() => {
+                this.sendDailyReport();
+                scheduleNext();
+            }, msUntil);
+        };
+
+        scheduleNext();
+    }
+
+    async sendDailyReport() {
+        try {
+            const deliveredCount = global.deliveryStats ? global.deliveryStats.count : 0;
+            const deliveredValue = global.deliveryStats ? global.deliveryStats.totalValue : 0;
+
+            const uptimeMs = Date.now() - global.startTime;
+            const uptimeHours = Math.floor(uptimeMs / 1000 / 60 / 60);
+            const uptimeMinutes = Math.floor(uptimeMs / 1000 / 60) % 60;
+
+            const date = new Date();
+            const dateStr = `${date.getDate().toString().padStart(2, '0')}.${(date.getMonth() + 1).toString().padStart(2, '0')}.${date.getFullYear()}`;
+
+            let msg = `📊 <b>Ежедневный отчёт</b> за ${dateStr}\n\n`;
+            msg += `🔑 Аккаунт: <code>${global.appData.userName || '—'}</code>\n`;
+            msg += `💰 Баланс: <code>${global.appData.balance || '—'}</code>\n`;
+            msg += `🛍️ Всего продаж: <code>${global.appData.sales || '—'}</code>\n\n`;
+            msg += `📦 <b>Автовыдача за сессию:</b>\n`;
+            msg += `   ├ Выдано: <code>${deliveredCount} шт.</code>\n`;
+            msg += `   └ На сумму: <code>${deliveredValue} ₽</code>\n\n`;
+            msg += `⏱ Аптайм: <code>${uptimeHours}ч ${uptimeMinutes}м</code>\n\n`;
+            msg += `<i>FunPayServer — автоматический отчёт</i>`;
+
+            let chatId = this.getChatID();
+            if (!chatId) return;
+            this.bot.telegram.sendMessage(chatId, msg, {
+                parse_mode: 'HTML',
+                disable_web_page_preview: true
+            });
+
+            log(`📊 Ежедневный отчёт отправлен в Telegram.`, 'g');
+        } catch (err) {
+            log(`Ошибка при отправке ежедневного отчёта: ${err}`, 'r');
         }
     }
 }
