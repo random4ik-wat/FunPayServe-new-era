@@ -18,11 +18,13 @@ const { checkForNewOrders, enableAutoIssue, getLotNames } = global.sales;
 const { checkGoodsState, enableGoodsStateCheck } = global.activity;
 
 global.startTime = Date.now();
+global.errorStats = { count: 0 };
 
 // UncaughtException Handler
 process.on('uncaughtException', (e) => {
     log('Ошибка: необработанное исключение. Сообщите об этом едитору.', 'r');
     log(e.stack);
+    global.errorStats.count++;
     // Даем 3 секунды, чтобы лог успел записаться в файл, затем завершаем процесс.
     // Менеджер процессов (pm2 / systemd) перезапустит бота с чистым состоянием.
     setTimeout(() => process.exit(1), 3000);
@@ -32,6 +34,7 @@ process.on('uncaughtException', (e) => {
 process.on('unhandledRejection', (reason, promise) => {
     log('Ошибка: необработанный промис. Сообщите об этом едитору.', 'r');
     log(reason?.stack || reason);
+    global.errorStats.count++;
     setTimeout(() => process.exit(1), 3000);
 });
 

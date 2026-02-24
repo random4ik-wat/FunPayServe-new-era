@@ -53,7 +53,7 @@ export default async function fetch_(url, options, delay = 0, retries = 20) {
         // Making request with timeout
         let res = await fetchWithTimeout(url, options);
 
-        // Retrying if necessary
+        // Retrying with exponential backoff
         while (!res || !res.ok) {
             if (tries > retries) {
                 retriesErrCounter++;
@@ -64,7 +64,10 @@ export default async function fetch_(url, options, delay = 0, retries = 20) {
                 log(res);
                 break;
             };
-            await sleep(2000);
+            // Exponential backoff: 2с → 4с → 8с → 16с → 30с (max)
+            const backoffMs = Math.min(2000 * Math.pow(2, tries - 1), 30000);
+            log(`Попытка ${tries}/${retries}, повтор через ${backoffMs / 1000}с...`, 'y');
+            await sleep(backoffMs);
             res = await fetchWithTimeout(url, options);
             tries++;
         }
@@ -72,8 +75,10 @@ export default async function fetch_(url, options, delay = 0, retries = 20) {
         retriesErrCounter = 0;
         return res;
     } catch (err) {
-        log(`Ошибка при запросе (нет доступа к интернету / funpay): ${err}`);
-        //return await fetch_(url, options, delay + 200, retries - 5);
+        // Таймауты не считаются критическими ошибками
+        if (err?.name !== 'AbortError') {
+            log(`Ошибка при запросе (нет доступа к интернету / funpay): ${err}`);
+        }
     }
 }
 

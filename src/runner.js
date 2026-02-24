@@ -22,6 +22,11 @@ class Runner {
         this.messagesTag = getRandomTag();
 
         this.startup = true;
+        this.consecutiveErrors = 0;
+        this.loopInterval = 6000;
+
+        // Глобальный счётчик ошибок за сессию
+        if (!global.errorStats) global.errorStats = { count: 0 };
     }
 
     async start() {
@@ -33,9 +38,29 @@ class Runner {
 
     scheduleNextLoop() {
         setTimeout(async () => {
-            await this.loop();
+            try {
+                await this.loop();
+                // Успешный цикл — сброс счётчика ошибок
+                if (this.consecutiveErrors > 0) {
+                    log(`Соединение восстановлено после ${this.consecutiveErrors} ошибок.`, 'g');
+                    this.consecutiveErrors = 0;
+                    this.loopInterval = 6000;
+                }
+            } catch (err) {
+                this.consecutiveErrors++;
+                global.errorStats.count++;
+                log(`Ошибка в цикле событий (${this.consecutiveErrors} подряд): ${err}`, 'r');
+
+                if (this.consecutiveErrors >= 5 && this.loopInterval < 30000) {
+                    this.loopInterval = 30000;
+                    log(`⚠️ Слишком много ошибок, интервал увеличен до 30с.`, 'y');
+                    if (global.telegramBot) {
+                        global.telegramBot.sendErrorAlert(this.consecutiveErrors);
+                    }
+                }
+            }
             this.scheduleNextLoop();
-        }, 6000);
+        }, this.loopInterval);
     }
 
     async loop() {

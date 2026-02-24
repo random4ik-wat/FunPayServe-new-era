@@ -1,7 +1,7 @@
 const c = global.chalk;
 const Telegraf = global.telegraf;
 const Keyboard = global.telegram_keyboard;
-const { setConst, load, updateFile, getConst } = global.storage;
+const { setConst, load, updateFile, getConst, loadConfig } = global.storage;
 const { sendMessage } = global.chat;
 const log = global.log;
 
@@ -77,8 +77,18 @@ class TelegramBot {
                 return;
             }
 
-            if (msg == '❔ Инфо ❔') {
+            if (msg == '❓ Инфо ❓') {
                 this.getInfo(ctx);
+                return;
+            }
+
+            if (msg == '📦 Остатки 📦') {
+                await this.replyStock(ctx);
+                return;
+            }
+
+            if (msg == '🔄 Перезагрузить настройки 🔄') {
+                await this.reloadSettings(ctx);
                 return;
             }
 
@@ -182,7 +192,8 @@ class TelegramBot {
         const keyboard = Keyboard.make([
             ['🔥 Статус 🔥'],
             ['🚀 Редактировать автовыдачу 🚀'],
-            ['❔ Инфо ❔']
+            ['📦 Остатки 📦', '❓ Инфо ❓'],
+            ['🔄 Перезагрузить настройки 🔄']
         ]);
 
         return keyboard;
@@ -255,8 +266,9 @@ class TelegramBot {
 
         const deliveredCount = global.deliveryStats ? global.deliveryStats.count : 0;
         const deliveredValue = global.deliveryStats ? global.deliveryStats.totalValue : 0;
+        const errorCount = global.errorStats ? global.errorStats.count : 0;
 
-        const msg = `🔥 <b>Статус</b> 🔥\n\n🔑 Аккаунт: <code>${global.appData.userName}</code>\n💰 Баланс: <code>${global.appData.balance}</code>\n🛍️ Продажи: <code>${global.appData.sales}</code>\n♻️ Последнее обновление: <code>${lastUpdateTime} назад</code>\n\n🕒 Время работы: <code>${workTime}</code>\n⏲ Всегда онлайн: <code>${alwaysOnline}</code>\n👾 Автоответ: <code>${autoResponse}</code>\n🚀 Автовыдача: <code>${autoIssue}</code>\n🏆 Автоподнятие предложений: <code>${lotsRaise}</code>\n🔨 Автовосстановление предложений: <code>${goodsStateCheck}</code>\n\n📦 Выдано за сессию: <code>${deliveredCount} шт.</code> на <code>${deliveredValue} ₽</code>\n\n<i><a href="https://t.me/fplite">FunPayServer</a></i>`;
+        const msg = `🔥 <b>Статус</b> 🔥\n\n🔑 Аккаунт: <code>${global.appData.userName}</code>\n💰 Баланс: <code>${global.appData.balance}</code>\n🛍️ Продажи: <code>${global.appData.sales}</code>\n♻️ Последнее обновление: <code>${lastUpdateTime} назад</code>\n\n🕒 Время работы: <code>${workTime}</code>\n⏲ Всегда онлайн: <code>${alwaysOnline}</code>\n👾 Автоответ: <code>${autoResponse}</code>\n🚀 Автовыдача: <code>${autoIssue}</code>\n🏆 Автоподнятие предложений: <code>${lotsRaise}</code>\n🔨 Автовосстановление предложений: <code>${goodsStateCheck}</code>\n\n📦 Выдано за сессию: <code>${deliveredCount} шт.</code> на <code>${deliveredValue} ₽</code>\n⚠️ Ошибок за сессию: <code>${errorCount}</code>\n\n<i><a href="https://t.me/fplite">FunPayServer</a></i>`;
         const params = this.mainKeyboard.reply();
         params.disable_web_page_preview = true;
         ctx.replyWithHTML(msg, params);
@@ -290,6 +302,45 @@ class TelegramBot {
     getInfo(ctx) {
         const msg = `❔ <b>FunPayServer</b> ❔\n\n<b>FunPayServer</b> - это бот для площадки funpay.com с открытым исходным кодом, разработанный <b>NightStranger</b>.\n\nБольшое спасибо всем, кто поддерживает данный проект ❤️. Он живёт благодаря вам.\n\n<a href="https://github.com/NightStrang6r/FunPayServer">GitHub</a> | <a href="https://github.com/NightStrang6r/FunPayServer">Поддержать проект</a>`;
         ctx.replyWithHTML(msg);
+    }
+
+    async replyStock(ctx) {
+        try {
+            const goods = await load('data/configs/delivery.json');
+            if (!goods || goods.length === 0) {
+                ctx.reply('📦 Список автовыдачи пуст.', this.mainKeyboard.reply());
+                return;
+            }
+
+            let msg = `📦 <b>Остатки товаров</b>\n\n`;
+            for (let i = 0; i < goods.length; i++) {
+                const item = goods[i];
+                let stock = '∞';
+                if (item.nodes && Array.isArray(item.nodes)) {
+                    stock = `${item.nodes.length} шт.`;
+                } else if (item.message) {
+                    stock = '∞ (текст)';
+                }
+                msg += `[${i + 1}] <code>${item.name}</code> — ${stock}\n`;
+            }
+
+            ctx.replyWithHTML(msg, this.mainKeyboard.reply());
+        } catch (err) {
+            log(`Ошибка при получении остатков: ${err}`, 'r');
+            ctx.reply('❌ Ошибка при получении остатков.', this.mainKeyboard.reply());
+        }
+    }
+
+    async reloadSettings(ctx) {
+        try {
+            const newSettings = loadConfig();
+            Object.assign(global.settings, newSettings);
+            ctx.reply('✅ Настройки перезагружены из settings.txt!', this.mainKeyboard.reply());
+            log('Настройки перезагружены из Telegram.', 'g');
+        } catch (err) {
+            log(`Ошибка при перезагрузке настроек: ${err}`, 'r');
+            ctx.reply(`❌ Ошибка: ${err}`, this.mainKeyboard.reply());
+        }
     }
 
     addProduct(ctx) {
@@ -556,6 +607,24 @@ class TelegramBot {
         msg += `🛍️ <b>Товар:</b> <code>${productName}</code>\n`;
         msg += `📦 <b>Осталось:</b> <code>${remaining} шт.</code>\n\n`;
         msg += `Пополните запас, чтобы не потерять продажи!`;
+
+        let chatId = this.getChatID();
+        if (!chatId) return;
+        this.bot.telegram.sendMessage(chatId, msg, {
+            parse_mode: 'HTML',
+            disable_web_page_preview: true
+        });
+    }
+
+    async sendErrorAlert(consecutiveErrors) {
+        let msg = `🚨 <b>Множественные ошибки!</b>\n\n`;
+        msg += `Бот получил <code>${consecutiveErrors}</code> ошибок подряд.\n`;
+        msg += `Интервал опроса увеличен до <code>30с</code>.\n\n`;
+        msg += `Возможные причины:\n`;
+        msg += `• FunPay недоступен\n`;
+        msg += `• Проблемы с интернетом\n`;
+        msg += `• Истёк golden_key\n\n`;
+        msg += `Бот продолжает попытки подключения.`;
 
         let chatId = this.getChatID();
         if (!chatId) return;

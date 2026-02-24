@@ -524,4 +524,4 @@ async function askSettings() {
     return askSettings;
 }
 
-export { updateFile, initStorage, load, loadSettings, getConst, setConst, loadAutoIssueFile };
+export { updateFile, initStorage, load, loadSettings, loadConfig, getConst, setConst, loadAutoIssueFile };
