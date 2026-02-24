@@ -153,7 +153,7 @@ function loadConfig() {
     config.read(`${_dirname}/settings.txt`);
 
     let settings = {
-        golden_key: config.get('FunPay', 'golden_key'),
+        golden_key: config.get('FunPay', 'golden_key') || process.env.FPS_GOLDEN_KEY || '',
         userAgent: config.get('FunPay', 'user_agent'),
         alwaysOnline: Number(config.get('FunPay', 'alwaysOnline')),
         lotsRaise: Number(config.get('FunPay', 'lotsRaise')),
@@ -168,7 +168,7 @@ function loadConfig() {
         customGreetings: Number(config.get('FunPay', 'customGreetings') || 0),
         blacklist: (config.get('FunPay', 'blacklist') || '').split(',').map(s => s.trim()).filter(Boolean),
         telegramBot: Number(config.get('Telegram', 'enabled')),
-        telegramToken: config.get('Telegram', 'token'),
+        telegramToken: config.get('Telegram', 'token') || process.env.FPS_TG_TOKEN || '',
         userName: config.get('Telegram', 'userName'),
         userId: (config.get('Telegram', 'userId') || '0').split(',').map(s => Number(s.trim())).filter(n => n > 0),
         newMessageNotification: Number(config.get('Telegram', 'newMessageNotification')),
@@ -178,11 +178,13 @@ function loadConfig() {
         lowStockAlert: Number(config.get('Telegram', 'lowStockAlert')),
         thankYouMessage: Number(config.get('Telegram', 'thankYouMessage')),
         thankYouMessageText: replaceAll(config.get('Telegram', 'thankYouMessageText') || '', '\\n', '\n'),
+        thankBuyerAfterDelivery: Number(config.get('FunPay', 'thankBuyerAfterDelivery') || 0),
+        thankBuyerText: replaceAll(config.get('FunPay', 'thankBuyerText') || 'Спасибо за покупку!', '\\n', '\n'),
         dailyReport: Number(config.get('Telegram', 'dailyReport')),
         dailyReportHour: Number(config.get('Telegram', 'dailyReportHour')) || 20,
         ai: {
             enabled: Number(config.get('AI', 'enabled') || 0),
-            apiKey: config.get('AI', 'apiKey') || '',
+            apiKey: config.get('AI', 'apiKey') || process.env.FPS_AI_KEY || '',
             model: config.get('AI', 'model') || 'deepseek/deepseek-chat',
             chatAI: Number(config.get('AI', 'chatAI') || 0),
             systemAI: Number(config.get('AI', 'systemAI') || 0),

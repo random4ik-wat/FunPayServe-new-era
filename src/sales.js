@@ -12,6 +12,7 @@ const goodsfilePath = 'data/configs/delivery.json';
 const settings = global.settings;
 let goods = await load(goodsfilePath);
 let backupOrders = [];
+let processedOrders = new Set();
 
 // Счётчик выданных товаров за сессию
 global.deliveryStats = { count: 0, totalValue: 0 };
@@ -47,18 +48,37 @@ async function checkForNewOrders() {
                 return;
             }
 
+            // Анти-дубль: пропускаем если этот заказ уже выдавался
+            if (processedOrders.has(order.id)) continue;
+            processedOrders.add(order.id);
+
+            // Ограничение размера Set для предотвращения утечек памяти
+            if (processedOrders.size > 1000) {
+                const arr = Array.from(processedOrders);
+                processedOrders = new Set(arr.slice(arr.length - 500));
+            }
+
             if (global.telegramBot && settings.newOrderNotification) {
                 global.telegramBot.sendNewOrderNotification(order);
             }
 
             log(`Новый заказ ${c.yellowBright(order.id)} от покупателя ${c.yellowBright(order.buyerName)} на сумму ${c.yellowBright(order.price)} ₽.`);
 
+            let allIssued = true;
             for (let i = 0; i < order.count; i++) {
                 const issueResult = await issueGood(order.buyerId, order.buyerName, order.name, 'id');
                 if (issueResult && issueResult !== 'notInStock') {
                     global.deliveryStats.count++;
                     if (!isNaN(order.price)) global.deliveryStats.totalValue += order.price;
+                } else {
+                    allIssued = false;
                 }
+            }
+
+            // Авто-благодарность после успешной выдачи всех единиц
+            if (allIssued && settings.thankBuyerAfterDelivery && settings.thankBuyerText) {
+                let thankMsg = settings.thankBuyerText.replace('{name}', order.buyerName);
+                await sendMessage(`users-${global.appData.id}-${order.buyerId}`, thankMsg, false, settings.watermarkInAutoResponse);
             }
         }
 

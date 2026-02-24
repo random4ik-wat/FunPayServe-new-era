@@ -3,6 +3,7 @@ const Telegraf = global.telegraf;
 const Keyboard = global.telegram_keyboard;
 const { setConst, load, updateFile, getConst, loadConfig } = global.storage;
 const { getLatestLogPath } = await import('./log.js');
+import AdmZip from 'adm-zip';
 const { sendMessage } = global.chat;
 const log = global.log;
 
@@ -113,6 +114,16 @@ class TelegramBot {
                 return;
             }
 
+            if (msg == '💾 Бэкап 💾') {
+                await this.exportBackup(ctx);
+                return;
+            }
+
+            if (msg.startsWith('/test ')) {
+                await this.testAutoResponse(ctx, msg.replace('/test ', ''));
+                return;
+            }
+
             if (msg == '📛 Удалить товар 📛') {
                 this.removeProduct(ctx);
                 return;
@@ -211,7 +222,8 @@ class TelegramBot {
             ['🚀 Редактировать автовыдачу 🚀'],
             ['📦 Остатки 📦', '❓ Инфо ❓'],
             ['🤖 AI 🤖', '📋 Логи 📋'],
-            ['📊 Экспорт CSV 📊', '🔄 Настройки 🔄']
+            ['📊 Экспорт CSV 📊', '💾 Бэкап 💾'],
+            ['🔄 Настройки 🔄']
         ]);
 
         return keyboard;
@@ -395,6 +407,77 @@ class TelegramBot {
         } catch (err) {
             log(`Ошибка экспорта CSV: ${err}`, 'r');
             ctx.reply(`❌ Ошибка: ${err}`, this.mainKeyboard.reply());
+        }
+    }
+
+    async exportBackup(ctx) {
+        try {
+            const zip = new AdmZip();
+            const fs = global.fs_extra;
+            const cwd = process.cwd();
+
+            if (await fs.exists(`${cwd}/settings.txt`)) zip.addLocalFile(`${cwd}/settings.txt`);
+            if (await fs.exists(`${cwd}/s.example`)) zip.addLocalFile(`${cwd}/s.example`);
+            if (await fs.exists(`${cwd}/data/configs`)) zip.addLocalFolder(`${cwd}/data/configs`, 'data/configs');
+
+            const backupPath = `${cwd}/data/backup_${Date.now()}.zip`;
+            zip.writeZip(backupPath);
+
+            await ctx.replyWithDocument(
+                { source: backupPath, filename: backupPath.split('/').pop() },
+                { caption: `💾 Резервная копия настроек и конфигов` }
+            );
+
+            // Clean up
+            await fs.unlink(backupPath);
+        } catch (err) {
+            log(`Ошибка создания бэкапа: ${err}`, 'r');
+            ctx.reply(`❌ Ошибка создания бэкапа: ${err}`, this.mainKeyboard.reply());
+        }
+    }
+
+    async testAutoResponse(ctx, testMessage) {
+        try {
+            const autoRespData = await load('data/configs/autoResponse.json');
+            if (!autoRespData || !autoRespData.length) {
+                return ctx.reply('❌ Нет конфигов автоответа.', this.mainKeyboard.reply());
+            }
+
+            function levenshtein(a, b) {
+                const dp = Array.from({ length: a.length + 1 }, (_, i) => Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)));
+                for (let i = 1; i <= a.length; i++) {
+                    for (let j = 1; j <= b.length; j++) {
+                        dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + (a[i - 1] !== b[j - 1] ? 1 : 0));
+                    }
+                }
+                return dp[a.length][b.length];
+            }
+
+            for (let i = 0; i < autoRespData.length; i++) {
+                if (autoRespData[i].command && testMessage.trim().toLowerCase() === autoRespData[i].command.toLowerCase()) {
+                    return ctx.reply(`✅ <b>Точное совпадение:</b> ${autoRespData[i].command}\n\n<b>Ответ:</b>\n${autoRespData[i].response}`, { parse_mode: 'HTML' });
+                }
+                if (autoRespData[i].word && testMessage.trim().toLowerCase().includes(autoRespData[i].word.toLowerCase())) {
+                    return ctx.reply(`✅ <b>Ключевое слово:</b> ${autoRespData[i].word}\n\n<b>Ответ:</b>\n${autoRespData[i].response}`, { parse_mode: 'HTML' });
+                }
+            }
+
+            for (let i = 0; i < autoRespData.length; i++) {
+                if (autoRespData[i].command) {
+                    const dist = levenshtein(testMessage.trim().toLowerCase(), autoRespData[i].command.toLowerCase());
+                    if (dist > 0 && dist <= 2) {
+                        return ctx.reply(`⚠️ <b>Нечёткое совпадение (Fuzzy):</b> ${autoRespData[i].command} (опечаток: ${dist})\n\n<b>Ответ:</b>\n${autoRespData[i].response}`, { parse_mode: 'HTML' });
+                    }
+                }
+            }
+
+            if (global.settings.ai?.enabled && global.settings.ai?.chatAI) {
+                return ctx.reply(`🗣️ <b>Совпадений нет.</b> Сообщение было бы передано нейросети (AI Chat).`, { parse_mode: 'HTML' });
+            }
+
+            ctx.reply('❌ <b>Совпадений нет.</b> Бот бы ничего не ответил.', { parse_mode: 'HTML' });
+        } catch (err) {
+            ctx.reply(`❌ Ошибка проверки: ${err}`, this.mainKeyboard.reply());
         }
     }
 

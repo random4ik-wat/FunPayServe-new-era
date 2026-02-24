@@ -16,6 +16,9 @@ let isAutoRespBusy = false;
 const autoRespCooldown = new Map();
 const COOLDOWN_MS = 60000;
 
+// Ограничение сообщений (антифлуд)
+const userMsgHistory = new Map();
+
 // Ключевые слова для детекции споров
 const DISPUTE_KEYWORDS = ['открыт спор', 'dispute', 'арбитраж', 'претензия', 'спор открыт'];
 
@@ -165,6 +168,20 @@ async function processMessages() {
 }
 
 async function processIncomingMessages(message) {
+    // Антифлуд: >5 сообщений за 30 секунд -> игнорируем
+    const now = Date.now();
+    let history = userMsgHistory.get(message.user) || [];
+    history = history.filter(t => now - t < 30000);
+    history.push(now);
+    userMsgHistory.set(message.user, history);
+
+    if (history.length > 5) {
+        if (history.length === 6) { // Логируем только при первом превышении лимита
+            log(`Антифлуд: игнорирование сообщений от ${c.yellowBright(message.user)} (>5 сообщений за 30с)`, 'y');
+        }
+        return;
+    }
+
     // Notification
     if (global.telegramBot && settings.newMessageNotification) {
         if (settings.watermark) {

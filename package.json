@@ -4,6 +4,7 @@
   "description": "CLI app for auto-managing your FunPay account",
   "main": "src/index.js",
   "dependencies": {
+    "adm-zip": "^0.5.16",
     "chalk": "^5.0.1",
     "clone": "^2.1.2",
     "commander": "^9.4.0",
