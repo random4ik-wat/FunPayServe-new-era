@@ -77,6 +77,28 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 // Loading data
 const settings = global.settings;
 
+// Health Endpoint (HTTP)
+import { createServer } from 'http';
+const HEALTH_PORT = 3001;
+createServer((req, res) => {
+    if (req.url === '/health' && req.method === 'GET') {
+        const data = {
+            status: 'ok',
+            uptime: Math.floor((Date.now() - global.startTime) / 1000),
+            ram: (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(1) + ' MB',
+            errors: global.errorStats?.count || 0,
+            account: global.appData?.userName || 'unknown'
+        };
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(data));
+    } else {
+        res.writeHead(404);
+        res.end('Not Found');
+    }
+}).listen(HEALTH_PORT, () => {
+    log(`Health endpoint: http://localhost:${HEALTH_PORT}/health`, 'g');
+});
+
 log(`Получаем данные пользователя...`, 'c');
 const userData = await getUserData();
 if (!userData) await exit();

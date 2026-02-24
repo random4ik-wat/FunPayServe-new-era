@@ -139,6 +139,14 @@ async function getUserData() {
             };
 
             global.appData = result;
+
+            // Уведомление о смене баланса
+            if (global.appData._prevBalance !== undefined && global.appData._prevBalance !== balance) {
+                if (global.telegramBot) {
+                    global.telegramBot.sendBalanceChange(global.appData._prevBalance, balance);
+                }
+            }
+            global.appData._prevBalance = balance;
         } else {
             log(`Необходимо авторизоваться.`);
         }

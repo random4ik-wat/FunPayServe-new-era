@@ -460,6 +460,31 @@ class TelegramBot {
         });
     }
 
+    async sendDisputeAlert(userName, messageText) {
+        let msg = `🚨🚨🚨 <b>СПОР ОБНАРУЖЕН!</b> 🚨🚨🚨\n\n`;
+        msg += `👤 <b>Пользователь:</b> <code>${userName}</code>\n`;
+        msg += `💬 <b>Сообщение:</b> ${(messageText || '').substring(0, 300)}`;
+
+        let chatId = this.getChatID();
+        if (!chatId) return;
+        this.bot.telegram.sendMessage(chatId, msg, {
+            parse_mode: 'HTML',
+            disable_notification: false
+        });
+    }
+
+    async sendBalanceChange(oldBalance, newBalance) {
+        const arrow = Number(newBalance) > Number(oldBalance) ? '📈' : '📉';
+        let msg = `${arrow} <b>Баланс изменился</b>\n\n`;
+        msg += `💰 <code>${oldBalance}</code> → <code>${newBalance}</code>`;
+
+        let chatId = this.getChatID();
+        if (!chatId) return;
+        this.bot.telegram.sendMessage(chatId, msg, {
+            parse_mode: 'HTML'
+        });
+    }
+
     async sendAIChatNotification(buyerName, question, answer) {
         let msg = `🤖 <b>AI ответил покупателю</b>\n\n`;
         msg += `👤 <b>Покупатель:</b> <code>${buyerName}</code>\n`;
