@@ -136,4 +136,42 @@ async function logToFile(msg) {
     }
 }
 
+// Ротация логов: архивация >30 дней, удаление >60 дней
+async function rotateLogs() {
+    try {
+        const logPath = `${process.cwd()}/data/logs/`;
+        if (!(await fs.exists(logPath))) return;
+
+        const files = await fs.readdir(logPath);
+        const now = Date.now();
+        const DAY_MS = 86400000;
+
+        for (const file of files) {
+            const filePath = `${logPath}${file}`;
+            const stat = await fs.stat(filePath);
+            const ageDays = (now - stat.mtimeMs) / DAY_MS;
+
+            if (file.endsWith('.old') && ageDays > 60) {
+                await fs.remove(filePath);
+                console.log(`🗑️ Удалён старый лог: ${file}`);
+            } else if (file.endsWith('.txt') && ageDays > 30) {
+                await fs.rename(filePath, `${filePath}.old`);
+                console.log(`📦 Архивирован лог: ${file}`);
+            }
+        }
+    } catch (err) {
+        console.log(`Ошибка ротации логов: ${err}`);
+    }
+}
+
+// Путь к последнему лог-файлу
+function getLatestLogPath() {
+    const time = getDate();
+    return `${process.cwd()}/data/logs/log-${time.day}-${time.month}-${time.year}.txt`;
+}
+
+// Ротация при старте
+rotateLogs();
+
 export default log;
+export { rotateLogs, getLatestLogPath };

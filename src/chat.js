@@ -26,6 +26,11 @@ async function processMessages() {
         for (let j = 0; j < chats.length; j++) {
             const chat = chats[j];
 
+            // Чёрный список — пропускаем
+            if (settings.blacklist?.length && settings.blacklist.includes(chat.userName)) {
+                continue;
+            }
+
             // Command logic here
 
             // Commands in file

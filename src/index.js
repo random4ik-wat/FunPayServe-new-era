@@ -57,6 +57,23 @@ process.on('unhandledRejection', async (reason, promise) => {
     setTimeout(() => process.exit(1), 5000);
 });
 
+// Graceful Shutdown (SIGINT / SIGTERM)
+async function gracefulShutdown(signal) {
+    log(`\n🛑 Получен сигнал ${signal}. Завершение...`, 'y');
+    if (global.telegramBot) {
+        try {
+            const chatId = global.telegramBot.getChatID();
+            if (chatId) {
+                await global.telegramBot.bot.telegram.sendMessage(chatId, `🛑 Бот остановлен (${signal}).`);
+            }
+        } catch (_) { }
+    }
+    setTimeout(() => process.exit(0), 3000);
+}
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+
 // Loading data
 const settings = global.settings;
 

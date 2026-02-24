@@ -2,6 +2,7 @@ const c = global.chalk;
 const Telegraf = global.telegraf;
 const Keyboard = global.telegram_keyboard;
 const { setConst, load, updateFile, getConst, loadConfig } = global.storage;
+const { getLatestLogPath } = await import('./log.js');
 const { sendMessage } = global.chat;
 const log = global.log;
 
@@ -97,6 +98,11 @@ class TelegramBot {
                 return;
             }
 
+            if (msg == '📋 Логи 📋') {
+                await this.sendLogFile(ctx);
+                return;
+            }
+
             if (msg == '☑️ Добавить товар ☑️') {
                 this.addProduct(ctx);
                 return;
@@ -175,9 +181,10 @@ class TelegramBot {
         const from = ctx.update.message?.from || ctx.update.callback_query?.from;
         if (!from) return false;
 
-        // Приоритет: авторизация по числовому User ID
-        if (global.settings.userId && global.settings.userId !== 0) {
-            if (global.settings.userId === from.id) {
+        // Приоритет: авторизация по массиву User ID
+        const userIds = global.settings.userId;
+        if (Array.isArray(userIds) && userIds.length > 0) {
+            if (userIds.includes(from.id)) {
                 if (!getConst('chatId')) setConst('chatId', ctx.update.message?.chat?.id || ctx.update.callback_query?.message?.chat?.id);
                 return true;
             }
@@ -198,7 +205,8 @@ class TelegramBot {
             ['🔥 Статус 🔥'],
             ['🚀 Редактировать автовыдачу 🚀'],
             ['📦 Остатки 📦', '❓ Инфо ❓'],
-            ['🤖 AI 🤖', '🔄 Перезагрузить настройки 🔄']
+            ['🤖 AI 🤖', '📋 Логи 📋'],
+            ['🔄 Перезагрузить настройки 🔄']
         ]);
 
         return keyboard;
@@ -344,6 +352,31 @@ class TelegramBot {
             log('Настройки перезагружены из Telegram.', 'g');
         } catch (err) {
             log(`Ошибка при перезагрузке настроек: ${err}`, 'r');
+            ctx.reply(`❌ Ошибка: ${err}`, this.mainKeyboard.reply());
+        }
+    }
+
+    async sendLogFile(ctx) {
+        try {
+            const fs = global.fs_extra;
+            const logPath = getLatestLogPath();
+            if (!(await fs.exists(logPath))) {
+                ctx.reply('📋 Лог-файл за сегодня ещё не создан.', this.mainKeyboard.reply());
+                return;
+            }
+
+            const stat = await fs.stat(logPath);
+            if (stat.size > 50 * 1024 * 1024) {
+                ctx.reply('📋 Лог слишком большой (>50MB). Проверьте сервер.', this.mainKeyboard.reply());
+                return;
+            }
+
+            await ctx.replyWithDocument(
+                { source: logPath, filename: logPath.split('/').pop() },
+                { caption: `📋 Лог за сегодня (${(stat.size / 1024).toFixed(1)} KB)` }
+            );
+        } catch (err) {
+            log(`Ошибка отправки логов: ${err}`, 'r');
             ctx.reply(`❌ Ошибка: ${err}`, this.mainKeyboard.reply());
         }
     }
