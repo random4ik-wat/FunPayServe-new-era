@@ -2,6 +2,7 @@ const c = global.chalk;
 const Telegraf = global.telegraf;
 const Keyboard = global.telegram_keyboard;
 const { setConst, load, updateFile, getConst } = global.storage;
+const { sendMessage } = global.chat;
 const log = global.log;
 
 class TelegramBot {
@@ -36,6 +37,8 @@ class TelegramBot {
         this.waitingForLotName = false;
         this.waitingForLotContent = false;
         this.waitingForDeliveryFile = false;
+        this.waitingForReply = false;
+        this.replyToNode = null;
 
         this.lotType = '';
         this.lotName = '';
@@ -47,86 +50,92 @@ class TelegramBot {
         this.bot.on('text', (ctx) => this.onMessage(ctx));
         this.bot.on('document', (ctx) => this.onMessage(ctx));
         this.bot.on('inline_query', (ctx) => this.onInlineQuery(ctx));
+        this.bot.on('callback_query', (ctx) => this.onCallbackQuery(ctx));
     }
-    
+
     async onMessage(ctx) {
         try {
             const msg = ctx.update.message.text;
-            
-            if(!this.isUserAuthed(ctx)) {
+
+            if (!this.isUserAuthed(ctx)) {
                 ctx.reply('Привет! 😄\nДля авторизации введи свой ник в настройках FunPay Server, после чего перезапусти бота.');
                 return;
             }
-    
-            if(msg == '🔥 Статус 🔥') {
+
+            if (msg == '🔥 Статус 🔥') {
                 this.replyStatus(ctx);
                 return;
             }
-    
-            if(msg == '🚀 Редактировать автовыдачу 🚀') {
+
+            if (msg == '🚀 Редактировать автовыдачу 🚀') {
                 this.editAutoIssue(ctx);
                 return;
             }
 
-            if(msg == '❔ Инфо ❔') {
+            if (msg == '❔ Инфо ❔') {
                 this.getInfo(ctx);
                 return;
             }
 
-            if(msg == '☑️ Добавить товар ☑️') {
+            if (msg == '☑️ Добавить товар ☑️') {
                 this.addProduct(ctx);
                 return;
             }
 
-            if(msg == '📛 Удалить товар 📛') {
+            if (msg == '📛 Удалить товар 📛') {
                 this.removeProduct(ctx);
                 return;
             }
 
-            if(msg == 'Инструкция (выдача одного и того же текста)') {
+            if (msg == 'Инструкция (выдача одного и того же текста)') {
                 this.lotType = 'instruction';
                 this.addProductName(ctx);
                 return;
             }
 
-            if(msg == 'Аккаунты (выдача разных текстов по очереди)') {
+            if (msg == 'Аккаунты (выдача разных текстов по очереди)') {
                 this.lotType = 'accounts';
                 this.addProductName(ctx);
                 return;
             }
 
-            if(msg == '⬇️ Получить файл автовыдачи ⬇️') {
+            if (msg == '⬇️ Получить файл автовыдачи ⬇️') {
                 await this.getAutoIssueFile(ctx);
                 return;
             }
 
-            if(msg == '⬆️ Загрузить файл автовыдачи ⬆️') {
+            if (msg == '⬆️ Загрузить файл автовыдачи ⬆️') {
                 this.uploadAutoIssueFile(ctx);
                 return;
             }
 
-            if(msg == '🔙 Назад 🔙') {
+            if (msg == '🔙 Назад 🔙') {
                 await this.back(ctx);
                 return;
             }
 
-            if(this.waitingForLotName) {
+            if (this.waitingForLotName) {
                 await this.saveLotName(ctx);
                 return;
             }
 
-            if(this.waitingForLotContent) {
+            if (this.waitingForLotContent) {
                 await this.saveLotContent(ctx);
                 return;
             }
 
-            if(this.waitingForLotDelete) {
+            if (this.waitingForLotDelete) {
                 await this.deleteLot(ctx);
                 return;
             }
 
-            if(this.waitingForDeliveryFile) {
+            if (this.waitingForDeliveryFile) {
                 await this.onUploadDeliveryFile(ctx);
+                return;
+            }
+
+            if (this.waitingForReply) {
+                await this.onReplyMessage(ctx);
                 return;
             }
 
@@ -134,7 +143,7 @@ class TelegramBot {
             this.waitingForLotContent = false;
             this.waitingForLotDelete = false;
             this.waitingForDeliveryFile = false;
-            
+
             ctx.reply('🏠 Меню', this.mainKeyboard.reply());
         } catch (err) {
             log(`Ошибка при обработке telegram сообщения: ${err}`, 'r');
@@ -143,8 +152,22 @@ class TelegramBot {
     }
 
     isUserAuthed(ctx) {
-        if(global.settings.userName == ctx.update.message.from.username) {
-            if(!getConst('chatId')) setConst('chatId', ctx.update.message.chat.id);
+        const from = ctx.update.message?.from || ctx.update.callback_query?.from;
+        if (!from) return false;
+
+        // Приоритет: авторизация по числовому User ID
+        if (global.settings.userId && global.settings.userId !== 0) {
+            if (global.settings.userId === from.id) {
+                if (!getConst('chatId')) setConst('chatId', ctx.update.message?.chat?.id || ctx.update.callback_query?.message?.chat?.id);
+                return true;
+            }
+            return false;
+        }
+
+        // Fallback: авторизация по username
+        if (global.settings.userName === from.username) {
+            if (!getConst('chatId')) setConst('chatId', ctx.update.message?.chat?.id);
+            log(`⚠️ Рекомендуем перейти на авторизацию по userId. Ваш ID: ${from.id}. Укажите его в settings.txt.`, 'y');
             return true;
         }
         return false;
@@ -210,7 +233,7 @@ class TelegramBot {
             const hoursTitle = declensionNum(hours, ['час', 'часа', 'часов']);
             const minutesTitle = declensionNum(minutes, ['минута', 'минуты', 'минут']);
             const secondsTitle = declensionNum(seconds, ['секунда', 'секунды', 'секунд']);
-            return {days: days, hours: hours, minutes: minutes, seconds: seconds, daysTitle: daysTitle, hoursTitle: hoursTitle, minutesTitle: minutesTitle, secondsTitle: secondsTitle};
+            return { days: days, hours: hours, minutes: minutes, seconds: seconds, daysTitle: daysTitle, hoursTitle: hoursTitle, minutesTitle: minutesTitle, secondsTitle: secondsTitle };
         }
 
         const workTimeArr = msToTime(workTimeDiff);
@@ -238,16 +261,16 @@ class TelegramBot {
 
             let msg = `📄 <b>Список товаров</b> 📄`;
             await ctx.replyWithHTML(msg, this.editGoodsKeyboard.reply());
-    
-            for(let i = 0; i < goods.length; i++) {
+
+            for (let i = 0; i < goods.length; i++) {
                 goodsStr += `[${i + 1}] ${goods[i].name}\n`;
-    
-                if(goodsStr.length > 3000) {
+
+                if (goodsStr.length > 3000) {
                     await ctx.replyWithHTML(goodsStr, this.editGoodsKeyboard.reply());
                     goodsStr = '';
                 }
 
-                if(i == (goods.length - 1)) {
+                if (i == (goods.length - 1)) {
                     await ctx.replyWithHTML(goodsStr, this.editGoodsKeyboard.reply());
                 }
             }
@@ -280,8 +303,10 @@ class TelegramBot {
         this.waitingForLotContent = false;
         this.waitingForLotDelete = false;
         this.waitingForDeliveryFile = false;
+        this.waitingForReply = false;
+        this.replyToNode = null;
 
-        if(this.products.length > 0) {
+        if (this.products.length > 0) {
             let goods = await load('data/configs/delivery.json');
 
             const product = {
@@ -304,7 +329,7 @@ class TelegramBot {
         this.lotName = msg;
 
         let replyMessage = 'Понял-принял. Теперь отправь мне сообщение, которое будет выдано покупателю после оплаты.';
-        if(this.lotType == 'accounts') {
+        if (this.lotType == 'accounts') {
             replyMessage = 'Понял-принял. Теперь отправь мне сообщение, которое будет выдано покупателю после оплаты. Ты можешь отправить несколько сообщений. Каждое сообщение будет выдано после каждой покупки. Нажми "🔙 Назад 🔙" когда закончишь заполнять товар.';
         }
 
@@ -319,7 +344,7 @@ class TelegramBot {
         let keyboard = this.backKeyboard;
         let goods = await load('data/configs/delivery.json');
 
-        if(this.lotType != 'accounts') {
+        if (this.lotType != 'accounts') {
             this.waitingForLotContent = false;
             keyboard = this.mainKeyboard;
 
@@ -327,7 +352,7 @@ class TelegramBot {
                 "name": this.lotName,
                 "message": this.lotContent
             }
-    
+
             goods.push(product);
             await updateFile(goods, 'data/configs/delivery.json');
 
@@ -347,13 +372,13 @@ class TelegramBot {
         this.waitingForLotDelete = false;
 
         let num = Number(msg);
-        if(isNaN(num)) {
+        if (isNaN(num)) {
             ctx.reply(`Что-то это не похоже на число... Верну тебя в меню.`, this.mainKeyboard.reply());
             return;
         }
 
         let goods = await load('data/configs/delivery.json');
-        if(num > goods.length || num < 0) {
+        if (num > goods.length || num < 0) {
             ctx.reply(`Такого id нет в списке автовыдачи. Верну тебя в меню.`, this.mainKeyboard.reply());
             return;
         }
@@ -371,7 +396,7 @@ class TelegramBot {
         ctx.replyWithDocument({
             source: contents,
             filename: 'delivery.json'
-        }).catch(function(error) { log(error); })
+        }).catch(function (error) { log(error); })
     }
 
     uploadAutoIssueFile(ctx) {
@@ -385,7 +410,7 @@ class TelegramBot {
         let file_name = file.file_name;
         let contents = null;
 
-        if(file_name != 'delivery.json') {
+        if (file_name != 'delivery.json') {
             ctx.reply(`❌ Неверный формат файла.`, this.mainKeyboard.reply());
             return;
         }
@@ -396,7 +421,7 @@ class TelegramBot {
             let file_path = await this.bot.telegram.getFileLink(file_id);
             let fileContents = await fetch(file_path);
             contents = await fileContents.text();
-        } catch(e) {
+        } catch (e) {
             ctx.reply(`❌ Не удалось загрузить файл.`, this.mainKeyboard.reply());
             return;
         }
@@ -407,7 +432,7 @@ class TelegramBot {
             let json = JSON.parse(contents);
             await updateFile(json, 'data/configs/delivery.json');
             ctx.reply(`✔️ Окей, обновил файл автовыдачи.`, this.editGoodsKeyboard.reply());
-        } catch(e) {
+        } catch (e) {
             ctx.reply(`❌ Неверный формат JSON.`, this.mainKeyboard.reply());
         }
     }
@@ -416,9 +441,37 @@ class TelegramBot {
         console.log(ctx);
     }
 
+    async onCallbackQuery(ctx) {
+        try {
+            const data = ctx.update.callback_query.data;
+            const from = ctx.update.callback_query.from;
+
+            // Проверяем авторизацию
+            if (global.settings.userId && global.settings.userId !== 0) {
+                if (global.settings.userId !== from.id) return ctx.answerCbQuery('⛔ Нет доступа');
+            } else if (global.settings.userName !== from.username) {
+                return ctx.answerCbQuery('⛔ Нет доступа');
+            }
+
+            // Обработка кнопки "Ответить"
+            if (data.startsWith('reply_')) {
+                const node = data.replace('reply_', '');
+                this.waitingForReply = true;
+                this.replyToNode = node;
+                await ctx.answerCbQuery('✍️ Введите ответ');
+                await ctx.reply(`✍️ Введите сообщение для отправки в чат (node: ${node})\nНажмите "🔙 Назад 🔙" для отмены.`, this.backKeyboard.reply());
+                return;
+            }
+
+            await ctx.answerCbQuery();
+        } catch (err) {
+            log(`Ошибка при обработке callback_query: ${err}`, 'r');
+        }
+    }
+
     getChatID() {
         let chatId = getConst('chatId');
-        if(!chatId) {
+        if (!chatId) {
             log(`Напишите своему боту в Telegram, чтобы он мог отправлять вам уведомления.`);
             return false;
         }
@@ -431,10 +484,18 @@ class TelegramBot {
         msg += `<i>${message.time}</i> | <a href="https://funpay.com/chat/?node=${message.node}">Перейти в чат</a>`
 
         let chatId = this.getChatID();
-        if(!chatId) return;
+        if (!chatId) return;
         this.bot.telegram.sendMessage(chatId, msg, {
             parse_mode: 'HTML',
-            disable_web_page_preview: true
+            disable_web_page_preview: true,
+            reply_markup: {
+                inline_keyboard: [
+                    [
+                        { text: '💬 Ответить', callback_data: `reply_${message.node}` },
+                        { text: '🔗 Открыть чат', url: `https://funpay.com/chat/?node=${message.node}` }
+                    ]
+                ]
+            }
         });
     }
 
@@ -444,10 +505,17 @@ class TelegramBot {
         msg += `🛍️ <b>Товар:</b> <code>${order.name}</code>`;
 
         let chatId = this.getChatID();
-        if(!chatId) return;
+        if (!chatId) return;
         this.bot.telegram.sendMessage(chatId, msg, {
             parse_mode: 'HTML',
-            disable_web_page_preview: true
+            disable_web_page_preview: true,
+            reply_markup: {
+                inline_keyboard: [
+                    [
+                        { text: '🔗 Открыть заказ', url: `https://funpay.com/orders/${order.id.replace('#', '')}/` }
+                    ]
+                ]
+            }
         });
     }
 
@@ -456,7 +524,7 @@ class TelegramBot {
         msg += `⌚ Следующее поднятие: <b><i>${nextTimeMsg}</i></b>`;
 
         let chatId = this.getChatID();
-        if(!chatId) return;
+        if (!chatId) return;
         this.bot.telegram.sendMessage(chatId, msg, {
             parse_mode: 'HTML',
             disable_web_page_preview: true
@@ -468,11 +536,52 @@ class TelegramBot {
         msg += `${message}`;
 
         let chatId = this.getChatID();
-        if(!chatId) return;
+        if (!chatId) return;
         this.bot.telegram.sendMessage(chatId, msg, {
             parse_mode: 'HTML',
             disable_web_page_preview: true
         });
+    }
+
+    async sendLowStockAlert(productName, remaining) {
+        let msg = `⚠️ <b>Низкий остаток товара!</b>\n\n`;
+        msg += `🛍️ <b>Товар:</b> <code>${productName}</code>\n`;
+        msg += `📦 <b>Осталось:</b> <code>${remaining} шт.</code>\n\n`;
+        msg += `Пополните запас, чтобы не потерять продажи!`;
+
+        let chatId = this.getChatID();
+        if (!chatId) return;
+        this.bot.telegram.sendMessage(chatId, msg, {
+            parse_mode: 'HTML',
+            disable_web_page_preview: true
+        });
+    }
+
+    async onReplyMessage(ctx) {
+        try {
+            const msg = ctx.update.message.text;
+            const node = this.replyToNode;
+
+            this.waitingForReply = false;
+            this.replyToNode = null;
+
+            if (!node || !msg) {
+                ctx.reply('❌ Не удалось отправить ответ.', this.mainKeyboard.reply());
+                return;
+            }
+
+            const result = await sendMessage(node, msg, false);
+
+            if (result) {
+                ctx.reply(`✅ Сообщение отправлено в чат.`, this.mainKeyboard.reply());
+                log(`Сообщение отправлено в чат (node: ${node}) из Telegram: ${msg}`, 'g');
+            } else {
+                ctx.reply(`❌ Не удалось отправить сообщение.`, this.mainKeyboard.reply());
+            }
+        } catch (err) {
+            log(`Ошибка при отправке ответа из Telegram: ${err}`, 'r');
+            ctx.reply(`❌ Ошибка: ${err}`, this.mainKeyboard.reply());
+        }
     }
 }
 

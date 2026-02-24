@@ -85,11 +85,23 @@ async function issueGood(buyerIdOrNode, buyerName, goodName, type = 'id') {
                             await updateFile(goods, goodsfilePath);
                             message = node;
                             notInStock = false;
+
+                            // Проверка низкого остатка товара
+                            if (global.telegramBot && settings.lowStockAlert && goods[i].nodes.length <= 3 && goods[i].nodes.length > 0) {
+                                global.telegramBot.sendLowStockAlert(goods[i].name, goods[i].nodes.length);
+                            }
+
                             break;
                         }
 
                         if (notInStock) {
                             log(`Похоже, товар "${goodName}" закончился, выдавать нечего.`);
+
+                            // Уведомление о полностью закончившемся товаре
+                            if (global.telegramBot && settings.lowStockAlert) {
+                                global.telegramBot.sendLowStockAlert(goods[i].name, 0);
+                            }
+
                             return 'notInStock';
                         }
                     }
@@ -112,6 +124,13 @@ async function issueGood(buyerIdOrNode, buyerName, goodName, type = 'id') {
 
                 if (global.telegramBot && settings.deliveryNotification) {
                     global.telegramBot.sendDeliveryNotification(buyerName, goodName, message, node);
+                }
+
+                // Сообщение "Спасибо за покупку"
+                if (settings.thankYouMessage && settings.thankYouMessageText) {
+                    const thankMsg = settings.thankYouMessageText.replace('{name}', buyerName);
+                    await sendMessage(node, thankMsg, customNode);
+                    log(`Сообщение "Спасибо за покупку" отправлено ${c.yellowBright(buyerName)}.`, 'g');
                 }
 
             } else {

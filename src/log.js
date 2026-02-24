@@ -31,13 +31,19 @@ function printLogo() {
     console.log(c.magenta(by));
     console.log(c.greenBright(` *Creator telegram: https://t.me/fplite\n  └─*Editor telegram: https://t.me/XXX\n`));
     console.log(c.greenBright(` *Creator Discord: https://discord.gg/Y9tZYkgk3p\n  └─*Editor Discord: https://discord.gg/XXX\n`));
-    console.log(c.greenBright(` *Creator Github: https://github.com/NightStrang6r/FunPayServer\n  ├─*Editor Github: https://github.com/random4ik-wat/XXX\n  └─*Editor GitLab: https://gitlab.com/random4ik-wat/XXX\n`));
+    console.log(c.greenBright(` *Creator Github: https://github.com/NightStrang6r/FunPayServer\n  ├─*Editor Github: https://github.com/random4ik-wat/FunPayServe-new-era\n  └─*Editor GitLab: https://gitlab.com/random4ik-wat/FunPayServe-new-era\n`));
 }
 
 function log(msg, color = 'w') {
     const date = getDate();
     const dateString = `[${date.day}.${date.month}.${date.year}]`;
     const timeString = `[${date.hour}:${date.minute}:${date.second}]`;
+
+    // Маскируем секреты перед выводом
+    if (typeof msg === 'string') {
+        msg = maskSecrets(msg);
+    }
+
     const logText = `>${dateString} ${timeString}: ${msg}`;
     let coloredMsg = msg;
 
@@ -58,11 +64,18 @@ function log(msg, color = 'w') {
         if (enableFileLog)
             logToFile(logText);
     } else {
-        console.log(msg);
+        const maskedObj = maskSecrets(JSON.stringify(msg, null, 4));
+        console.log(maskedObj);
 
         if (enableFileLog)
-            logToFile(JSON.stringify(msg, null, 4));
+            logToFile(maskedObj);
     }
+}
+
+function maskSecrets(text) {
+    if (typeof text !== 'string') return text;
+    // Маскируем golden_key
+    return text.replace(/golden_key[=:][\s]?[\w-]+/gi, 'golden_key=***HIDDEN***');
 }
 
 function getDate() {
