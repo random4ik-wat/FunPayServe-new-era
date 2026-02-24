@@ -57,6 +57,15 @@ class Runner {
                     if (global.telegramBot) {
                         global.telegramBot.sendErrorAlert(this.consecutiveErrors);
                     }
+                    // AI диагностика
+                    if (global.settings?.ai?.enabled && global.settings?.ai?.systemAI && global.ai) {
+                        try {
+                            const diagnosis = await global.ai.diagnoseError(String(err), `runner loop, ${this.consecutiveErrors} consecutive errors`);
+                            if (diagnosis && global.telegramBot) {
+                                global.telegramBot.sendAIDiagnosis(diagnosis, String(err));
+                            }
+                        } catch (_) { }
+                    }
                 }
             }
             this.scheduleNextLoop();

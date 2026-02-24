@@ -29,6 +29,7 @@ async function processMessages() {
             // Command logic here
 
             // Commands in file
+            let matched = false;
             for (let i = 0; i < autoRespData.length; i++) {
                 const useWatermark = settings.watermarkInAutoResponse;
 
@@ -38,6 +39,7 @@ async function processMessages() {
                     let smRes = await sendMessage(chat.node, autoRespData[i].response, false, useWatermark);
                     if (smRes)
                         log(`Ответ на команду отправлен.`, `g`);
+                    matched = true;
                     break;
                 }
 
@@ -47,7 +49,26 @@ async function processMessages() {
                     let smRes = await sendMessage(chat.node, autoRespData[i].response, false, useWatermark);
                     if (smRes)
                         log(`Ответ на ключевое слово отправлен.`, `g`);
+                    matched = true;
                     break;
+                }
+            }
+
+            // AI Fallback — если автоответ не сработал
+            if (!matched && settings.ai?.enabled && settings.ai?.chatAI && global.ai) {
+                try {
+                    const aiReply = await global.ai.chatReply(chat.userName, chat.message);
+                    if (aiReply) {
+                        let smRes = await sendMessage(chat.node, aiReply, false, false);
+                        if (smRes) {
+                            log(`🤖 AI ответ отправлен пользователю ${c.yellowBright(chat.userName)}.`, 'c');
+                            if (global.telegramBot) {
+                                global.telegramBot.sendAIChatNotification(chat.userName, chat.message, aiReply);
+                            }
+                        }
+                    }
+                } catch (aiErr) {
+                    log(`Ошибка AI автоответа: ${aiErr}`, 'r');
                 }
             }
 

@@ -92,6 +92,11 @@ class TelegramBot {
                 return;
             }
 
+            if (msg == '🤖 AI 🤖') {
+                await this.replyAIStatus(ctx);
+                return;
+            }
+
             if (msg == '☑️ Добавить товар ☑️') {
                 this.addProduct(ctx);
                 return;
@@ -193,7 +198,7 @@ class TelegramBot {
             ['🔥 Статус 🔥'],
             ['🚀 Редактировать автовыдачу 🚀'],
             ['📦 Остатки 📦', '❓ Инфо ❓'],
-            ['🔄 Перезагрузить настройки 🔄']
+            ['🤖 AI 🤖', '🔄 Перезагрузить настройки 🔄']
         ]);
 
         return keyboard;
@@ -341,6 +346,57 @@ class TelegramBot {
             log(`Ошибка при перезагрузке настроек: ${err}`, 'r');
             ctx.reply(`❌ Ошибка: ${err}`, this.mainKeyboard.reply());
         }
+    }
+
+    async replyAIStatus(ctx) {
+        const ai = global.settings?.ai;
+        const stats = global.ai?.getStats ? global.ai.getStats() : { chatRequests: 0, systemRequests: 0, errors: 0 };
+
+        const enabled = ai?.enabled ? '✅ Вкл' : '❌ Выкл';
+        const chatAI = ai?.chatAI ? '✅ Вкл' : '❌ Выкл';
+        const systemAI = ai?.systemAI ? '✅ Вкл' : '❌ Выкл';
+        const model = ai?.model || 'не указана';
+        const hasKey = ai?.apiKey ? '✅ Указан' : '❌ Не указан';
+
+        let msg = `🤖 <b>AI Статус</b>\n\n`;
+        msg += `📡 AI: <code>${enabled}</code>\n`;
+        msg += `🔑 API Key: <code>${hasKey}</code>\n`;
+        msg += `🧠 Модель: <code>${model}</code>\n\n`;
+        msg += `💬 Chat AI: <code>${chatAI}</code>\n`;
+        msg += `🔧 System AI: <code>${systemAI}</code>\n\n`;
+        msg += `📊 <b>Статистика за сессию:</b>\n`;
+        msg += `   ├ Ответов покупателям: <code>${stats.chatRequests}</code>\n`;
+        msg += `   ├ Диагностик ошибок: <code>${stats.systemRequests}</code>\n`;
+        msg += `   └ Ошибок AI: <code>${stats.errors}</code>`;
+
+        ctx.replyWithHTML(msg, this.mainKeyboard.reply());
+    }
+
+    async sendAIDiagnosis(diagnosis, errorShort) {
+        let msg = `🤖 <b>AI Диагноз ошибки</b>\n\n`;
+        msg += `❌ <b>Ошибка:</b> <code>${(errorShort || '').substring(0, 200)}</code>\n\n`;
+        msg += `🔍 <b>AI анализ:</b>\n${diagnosis}`;
+
+        let chatId = this.getChatID();
+        if (!chatId) return;
+        this.bot.telegram.sendMessage(chatId, msg, {
+            parse_mode: 'HTML',
+            disable_web_page_preview: true
+        });
+    }
+
+    async sendAIChatNotification(buyerName, question, answer) {
+        let msg = `🤖 <b>AI ответил покупателю</b>\n\n`;
+        msg += `👤 <b>Покупатель:</b> <code>${buyerName}</code>\n`;
+        msg += `❓ <b>Вопрос:</b> ${question.substring(0, 200)}\n\n`;
+        msg += `💬 <b>AI ответ:</b> ${answer.substring(0, 300)}`;
+
+        let chatId = this.getChatID();
+        if (!chatId) return;
+        this.bot.telegram.sendMessage(chatId, msg, {
+            parse_mode: 'HTML',
+            disable_web_page_preview: true
+        });
     }
 
     addProduct(ctx) {

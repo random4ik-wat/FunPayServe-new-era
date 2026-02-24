@@ -21,21 +21,40 @@ global.startTime = Date.now();
 global.errorStats = { count: 0 };
 
 // UncaughtException Handler
-process.on('uncaughtException', (e) => {
+process.on('uncaughtException', async (e) => {
     log('Ошибка: необработанное исключение. Сообщите об этом едитору.', 'r');
     log(e.stack);
     global.errorStats.count++;
-    // Даем 3 секунды, чтобы лог успел записаться в файл, затем завершаем процесс.
-    // Менеджер процессов (pm2 / systemd) перезапустит бота с чистым состоянием.
-    setTimeout(() => process.exit(1), 3000);
+
+    // AI диагностика
+    if (settings?.ai?.enabled && settings?.ai?.systemAI && global.ai) {
+        try {
+            const diagnosis = await global.ai.diagnoseError(e.stack, 'uncaughtException');
+            if (diagnosis && global.telegramBot) {
+                global.telegramBot.sendAIDiagnosis(diagnosis, e.message);
+            }
+        } catch (_) { }
+    }
+
+    setTimeout(() => process.exit(1), 5000);
 });
 
 // UnhandledRejection Handler (для необработанных промисов)
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', async (reason, promise) => {
     log('Ошибка: необработанный промис. Сообщите об этом едитору.', 'r');
     log(reason?.stack || reason);
     global.errorStats.count++;
-    setTimeout(() => process.exit(1), 3000);
+
+    if (settings?.ai?.enabled && settings?.ai?.systemAI && global.ai) {
+        try {
+            const diagnosis = await global.ai.diagnoseError(reason?.stack || String(reason), 'unhandledRejection');
+            if (diagnosis && global.telegramBot) {
+                global.telegramBot.sendAIDiagnosis(diagnosis, String(reason?.message || reason));
+            }
+        } catch (_) { }
+    }
+
+    setTimeout(() => process.exit(1), 5000);
 });
 
 // Loading data

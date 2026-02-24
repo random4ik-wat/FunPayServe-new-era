@@ -178,6 +178,14 @@ function loadConfig() {
         thankYouMessageText: replaceAll(config.get('Telegram', 'thankYouMessageText') || '', '\\n', '\n'),
         dailyReport: Number(config.get('Telegram', 'dailyReport')),
         dailyReportHour: Number(config.get('Telegram', 'dailyReportHour')) || 20,
+        ai: {
+            enabled: Number(config.get('AI', 'enabled') || 0),
+            apiKey: config.get('AI', 'apiKey') || '',
+            model: config.get('AI', 'model') || 'deepseek/deepseek-chat',
+            chatAI: Number(config.get('AI', 'chatAI') || 0),
+            systemAI: Number(config.get('AI', 'systemAI') || 0),
+            maxTokens: Number(config.get('AI', 'maxTokens') || 150)
+        },
         proxy: {
             useProxy: Number(config.get('Proxy', 'enabled')),
             host: config.get('Proxy', 'host'),
