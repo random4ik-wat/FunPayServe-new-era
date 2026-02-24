@@ -20,6 +20,7 @@ class TelegramBot {
 
     async run() {
         this.setupListeners();
+        this.setupAdditionalListeners();
         await this.setupBot();
 
         this.bot.launch();
@@ -109,6 +110,11 @@ class TelegramBot {
                 return;
             }
 
+            if (msg == '🔄 Настройки 🔄') {
+                this.sendSettingsMenu(ctx);
+                return;
+            }
+
             if (msg == '☑️ Добавить товар ☑️') {
                 this.addProduct(ctx);
                 return;
@@ -193,6 +199,48 @@ class TelegramBot {
         }
     }
 
+    setupAdditionalListeners() {
+        this.bot.on('callback_query', async (ctx, next) => {
+            if (!this.isUserAuthed(ctx)) return;
+            const data = ctx.callbackQuery.data;
+
+            if (data && data.startsWith('toggle_')) {
+                const setting = data.replace('toggle_', '');
+                await this.toggleSetting(ctx, setting);
+            }
+            return next();
+        });
+
+        // Слушатель для ответов на сообщения (Push-ответы на FunPay)
+        this.bot.on('text', async (ctx, next) => {
+            if (!this.isUserAuthed(ctx)) return next();
+            const replyTo = ctx.message.reply_to_message;
+            if (replyTo && replyTo.text && replyTo.text.includes('Новое сообщение от')) {
+                // Извлекаем никнейм из сообщения бота (формат: ✉️ Новое сообщение от Nickname:)
+                const match = replyTo.text.match(/Новое сообщение от (.*?):/);
+                if (match && match[1]) {
+                    const buyerName = match[1].trim();
+                    // Ищем чат с этим пользователем
+                    const chats = global.appData?.chats || [];
+                    const chat = chats.find(c => c.name === buyerName);
+
+                    if (chat) {
+                        const success = await sendMessage(chat.node, ctx.message.text, false, global.settings.watermarkInAutoResponse);
+                        if (success) {
+                            ctx.reply(`✅ Сообщение отправлено пользователю ${buyerName}`);
+                        } else {
+                            ctx.reply(`❌ Ошибка отправки пользователю ${buyerName}`);
+                        }
+                    } else {
+                        ctx.reply(`❌ Чат с пользователем ${buyerName} не найден в памяти. Попробуйте обновить страницу диалогов FunPay.`);
+                    }
+                    return;
+                }
+            }
+            return next();
+        });
+    }
+
     isUserAuthed(ctx) {
         const from = ctx.update.message?.from || ctx.update.callback_query?.from;
         if (!from) return false;
@@ -226,6 +274,18 @@ class TelegramBot {
             ['🔄 Настройки 🔄']
         ]);
 
+        return keyboard;
+    }
+
+    getSettingsKeyboard() {
+        const s = global.settings;
+        const keyboard = Keyboard.make([
+            [Keyboard.callbackButton(`Автовыдача: ${s.autoIssue ? '✅ Вкл' : '❌ Выкл'}`, 'toggle_autoIssue')],
+            [Keyboard.callbackButton(`Автоподнятие: ${s.lotsRaise ? '✅ Вкл' : '❌ Выкл'}`, 'toggle_lotsRaise')],
+            [Keyboard.callbackButton(`Автоответ: ${s.autoResponse ? '✅ Вкл' : '❌ Выкл'}`, 'toggle_autoResponse')],
+            [Keyboard.callbackButton(`Телеграм уведомления ⬇️`, 'dummy')],
+            [Keyboard.callbackButton(`Сообщения: ${s.newMessageNotification ? '✅' : '❌'}`, 'toggle_newMessageNotification'), Keyboard.callbackButton(`Заказы: ${s.newOrderNotification ? '✅' : '❌'}`, 'toggle_newOrderNotification')],
+        ]);
         return keyboard;
     }
 

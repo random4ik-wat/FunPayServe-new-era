@@ -205,8 +205,14 @@ async function processIncomingMessages(message) {
     if (settings.greetingMessage && settings.greetingMessageText) {
         const newChatUsers = await load('data/other/newChatUsers.json');
 
-        if (!newChatUsers.includes(message.user)) {
-            newChatUsers.push(message.user);
+        // Проверяем, есть ли юзер в истории (поддерживаем старый формат строк и новый формат объектов)
+        const isUserKnown = newChatUsers.some(entry =>
+            (typeof entry === 'string' && entry === message.user) ||
+            (typeof entry === 'object' && entry.id === message.user)
+        );
+
+        if (!isUserKnown) {
+            newChatUsers.push({ id: message.user, timestamp: Date.now() });
 
             let msg = settings.greetingMessageText;
 
@@ -284,6 +290,12 @@ async function sendMessage(node, message, customNode = false, useWatermark = tru
     let result = false;
 
     try {
+        if (global.settings.typingDelay) {
+            // Эмуляция набора текста (случайная задержка 1.5 - 3 сек)
+            const delay = Math.floor(Math.random() * (3000 - 1500 + 1)) + 1500;
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+
         let newNode = node;
         const url = `${getConst('api')}/runner/`;
         const headers = {
@@ -440,8 +452,15 @@ async function addUsersToFile() {
         let users = await load('data/other/newChatUsers.json');
         for (let i = 0; i < bookmarks.length; i++) {
             const chat = bookmarks[i];
-            if (!users.includes(chat.userName))
-                users.push(chat.userName);
+
+            const isKnown = users.some(entry =>
+                (typeof entry === 'string' && entry === chat.userName) ||
+                (typeof entry === 'object' && entry.id === chat.userName)
+            );
+
+            if (!isKnown) {
+                users.push({ id: chat.userName, timestamp: Date.now() });
+            }
         }
 
         await updateFile(users, 'data/other/newChatUsers.json');

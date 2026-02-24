@@ -90,6 +90,34 @@ async function initStorage() {
                 await fs.writeFile(`${otherPath}/${file}`, '[]');
             }
         }
+
+        // Автоочистка newChatUsers.json (удаляем тех, кому писали > 30 дней назад)
+        try {
+            const chatUsersPath = `${otherPath}/newChatUsers.json`;
+            if (await fs.exists(chatUsersPath)) {
+                let users = JSON.parse(await fs.readFile(chatUsersPath, 'utf8') || '[]');
+                const now = Date.now();
+                const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+
+                let cleanedUsers = users.filter(user => {
+                    // Старый формат (просто строка) - удаляем, т.к. не знаем когда писали
+                    if (typeof user === 'string') return false;
+                    // Новый формат { id, timestamp }
+                    if (user && user.timestamp) {
+                        return (now - user.timestamp) < thirtyDaysMs;
+                    }
+                    return false;
+                });
+
+                if (cleanedUsers.length !== users.length) {
+                    await fs.writeFile(chatUsersPath, JSON.stringify(cleanedUsers, null, 2));
+                    log(`Очищено старых диалогов: ${users.length - cleanedUsers.length}. Текущий размер: ${cleanedUsers.length}.`, 'g');
+                }
+            }
+        } catch (e) {
+            log(`Ошибка очистки newChatUsers.json: ${e.message}`, 'y');
+        }
+
     } catch (err) {
         log(`Не удалось создать файлы хранилища: ${err}`);
     }
@@ -159,7 +187,9 @@ function loadConfig() {
         lotsRaise: Number(config.get('FunPay', 'lotsRaise')),
         goodsStateCheck: Number(config.get('FunPay', 'goodsStateCheck')),
         autoIssue: Number(config.get('FunPay', 'autoDelivery')),
+        randomDelivery: Number(config.get('FunPay', 'randomDelivery') || 0),
         autoResponse: Number(config.get('FunPay', 'autoResponse')),
+        typingDelay: Number(config.get('FunPay', 'typingDelay') || 0),
         greetingMessage: Number(config.get('FunPay', 'greetingMessage')),
         greetingMessageText: replaceAll(config.get('FunPay', 'greetingMessageText'), '\\n', '\n'),
         autoIssueTestCommand: Number(config.get('FunPay', 'autoDeliveryTestCommand')),

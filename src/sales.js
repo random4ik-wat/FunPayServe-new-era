@@ -106,9 +106,13 @@ async function issueGood(buyerIdOrNode, buyerName, goodName, type = 'id') {
                         let notInStock = true;
 
                         for (let j = 0; j < goods[i].nodes.length; j++) {
-                            const node = goods[i].nodes[j];
+                            let nodeIndex = 0;
+                            if (global.settings.randomDelivery && goods[i].nodes.length > 1) {
+                                nodeIndex = Math.floor(Math.random() * goods[i].nodes.length);
+                            }
+                            const node = goods[i].nodes[nodeIndex];
 
-                            goods[i].nodes.shift();
+                            goods[i].nodes.splice(nodeIndex, 1);
                             await updateFile(goods, goodsfilePath);
                             message = node;
                             notInStock = false;
