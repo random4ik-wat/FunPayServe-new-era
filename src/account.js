@@ -94,7 +94,12 @@ async function getUserData() {
         const appDataAttr = bodyEl?.getAttribute('data-app-data');
 
         if (!appDataAttr) {
-            log(`Не удалось получить данные приложения (data-app-data). Возможно, golden_key невалидный.`, 'r');
+            log(`Не удалось получить данные приложения (data-app-data). Возможно, golden_key невалидный или аккаунт заблокирован.`, 'r');
+            // Детект бана: если нет data-app-data, возможно аккаунт заблокирован
+            if (global.telegramBot && body.includes('Пользователь заблокирован') || body.includes('account is blocked') || body.includes('Доступ ограничен')) {
+                global.telegramBot.sendDisputeAlert({ user: 'СИСТЕМА', content: '🚨🚨🚨 АККАУНТ ЗАБЛОКИРОВАН! Немедленно проверьте FunPay!' });
+                log('🚨 АККАУНТ ЗАБЛОКИРОВАН!', 'r');
+            }
             return false;
         }
 
@@ -147,6 +152,11 @@ async function getUserData() {
                 }
             }
             global.appData._prevBalance = balance;
+
+            // История баланса для графика (макс 168 точек = 7 дней по часу)
+            if (!global.balanceHistory) global.balanceHistory = [];
+            global.balanceHistory.push({ t: timestamp, v: parseFloat(balance) || 0 });
+            if (global.balanceHistory.length > 168) global.balanceHistory.shift();
         } else {
             log(`Необходимо авторизоваться.`);
         }

@@ -99,6 +99,10 @@ createServer((req, res) => {
     log(`Health endpoint: http://localhost:${HEALTH_PORT}/health`, 'g');
 });
 
+// REST API (порт 3002)
+import { startAPI } from './api.js';
+startAPI();
+
 log(`Получаем данные пользователя...`, 'c');
 const userData = await getUserData();
 if (!userData) await exit();

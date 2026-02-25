@@ -72,6 +72,12 @@ function log(msg, color = 'w') {
     }
 }
 
+function maskSecrets(text) {
+    if (typeof text !== 'string') return text;
+    // Маскируем golden_key
+    return text.replace(/golden_key[=:][\s]?[\w-]+/gi, 'golden_key=***HIDDEN***');
+}
+
 function getDate() {
     const date = new Date();
 
@@ -166,31 +172,6 @@ function getLatestLogPath() {
 
 // Ротация при старте
 rotateLogs();
-
-// Защита от утечки секретов в логи
-function maskSecrets(text) {
-    if (!text || typeof text !== 'string') return text;
-    let result = text;
-
-    // Получаем текущие настройки (если они уже загружены)
-    const settings = global.settings || {};
-
-    const secrets = [
-        settings.golden_key,
-        settings.telegramToken,
-        settings.ai?.apiKey
-    ].filter(s => s && s.length > 5); // Игнорируем слишком короткие строки
-
-    secrets.forEach(secret => {
-        // Оставляем первые 3 и последние 3 символа, остальное - звездочки
-        const masked = secret.substring(0, 3) + '***' + secret.substring(secret.length - 3);
-        // Экранируем спецсимволы для RegExp
-        const safeSecret = secret.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        result = result.replace(new RegExp(safeSecret, 'g'), masked);
-    });
-
-    return result;
-}
 
 export default log;
 export { rotateLogs, getLatestLogPath };

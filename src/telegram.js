@@ -20,7 +20,6 @@ class TelegramBot {
 
     async run() {
         this.setupListeners();
-        this.setupAdditionalListeners();
         await this.setupBot();
 
         this.bot.launch();
@@ -110,11 +109,6 @@ class TelegramBot {
                 return;
             }
 
-            if (msg == '🔄 Настройки 🔄') {
-                this.sendSettingsMenu(ctx);
-                return;
-            }
-
             if (msg == '☑️ Добавить товар ☑️') {
                 this.addProduct(ctx);
                 return;
@@ -127,6 +121,16 @@ class TelegramBot {
 
             if (msg.startsWith('/test ')) {
                 await this.testAutoResponse(ctx, msg.replace('/test ', ''));
+                return;
+            }
+
+            if (msg.startsWith('/set ')) {
+                await this.setSettingCommand(ctx, msg);
+                return;
+            }
+
+            if (msg == '📈 График 📈') {
+                await this.sendBalanceChart(ctx);
                 return;
             }
 
@@ -199,48 +203,6 @@ class TelegramBot {
         }
     }
 
-    setupAdditionalListeners() {
-        this.bot.on('callback_query', async (ctx, next) => {
-            if (!this.isUserAuthed(ctx)) return;
-            const data = ctx.callbackQuery.data;
-
-            if (data && data.startsWith('toggle_')) {
-                const setting = data.replace('toggle_', '');
-                await this.toggleSetting(ctx, setting);
-            }
-            return next();
-        });
-
-        // Слушатель для ответов на сообщения (Push-ответы на FunPay)
-        this.bot.on('text', async (ctx, next) => {
-            if (!this.isUserAuthed(ctx)) return next();
-            const replyTo = ctx.message.reply_to_message;
-            if (replyTo && replyTo.text && replyTo.text.includes('Новое сообщение от')) {
-                // Извлекаем никнейм из сообщения бота (формат: ✉️ Новое сообщение от Nickname:)
-                const match = replyTo.text.match(/Новое сообщение от (.*?):/);
-                if (match && match[1]) {
-                    const buyerName = match[1].trim();
-                    // Ищем чат с этим пользователем
-                    const chats = global.appData?.chats || [];
-                    const chat = chats.find(c => c.name === buyerName);
-
-                    if (chat) {
-                        const success = await sendMessage(chat.node, ctx.message.text, false, global.settings.watermarkInAutoResponse);
-                        if (success) {
-                            ctx.reply(`✅ Сообщение отправлено пользователю ${buyerName}`);
-                        } else {
-                            ctx.reply(`❌ Ошибка отправки пользователю ${buyerName}`);
-                        }
-                    } else {
-                        ctx.reply(`❌ Чат с пользователем ${buyerName} не найден в памяти. Попробуйте обновить страницу диалогов FunPay.`);
-                    }
-                    return;
-                }
-            }
-            return next();
-        });
-    }
-
     isUserAuthed(ctx) {
         const from = ctx.update.message?.from || ctx.update.callback_query?.from;
         if (!from) return false;
@@ -271,21 +233,9 @@ class TelegramBot {
             ['📦 Остатки 📦', '❓ Инфо ❓'],
             ['🤖 AI 🤖', '📋 Логи 📋'],
             ['📊 Экспорт CSV 📊', '💾 Бэкап 💾'],
-            ['🔄 Настройки 🔄']
+            ['📈 График 📈', '🔄 Настройки 🔄']
         ]);
 
-        return keyboard;
-    }
-
-    getSettingsKeyboard() {
-        const s = global.settings;
-        const keyboard = Keyboard.make([
-            [Keyboard.callbackButton(`Автовыдача: ${s.autoIssue ? '✅ Вкл' : '❌ Выкл'}`, 'toggle_autoIssue')],
-            [Keyboard.callbackButton(`Автоподнятие: ${s.lotsRaise ? '✅ Вкл' : '❌ Выкл'}`, 'toggle_lotsRaise')],
-            [Keyboard.callbackButton(`Автоответ: ${s.autoResponse ? '✅ Вкл' : '❌ Выкл'}`, 'toggle_autoResponse')],
-            [Keyboard.callbackButton(`Телеграм уведомления ⬇️`, 'dummy')],
-            [Keyboard.callbackButton(`Сообщения: ${s.newMessageNotification ? '✅' : '❌'}`, 'toggle_newMessageNotification'), Keyboard.callbackButton(`Заказы: ${s.newOrderNotification ? '✅' : '❌'}`, 'toggle_newOrderNotification')],
-        ]);
         return keyboard;
     }
 
@@ -538,6 +488,78 @@ class TelegramBot {
             ctx.reply('❌ <b>Совпадений нет.</b> Бот бы ничего не ответил.', { parse_mode: 'HTML' });
         } catch (err) {
             ctx.reply(`❌ Ошибка проверки: ${err}`, this.mainKeyboard.reply());
+        }
+    }
+
+    async setSettingCommand(ctx, msg) {
+        try {
+            const parts = msg.split(' ');
+            if (parts.length < 3) {
+                return ctx.reply('⚙️ Формат: /set <ключ> <значение>\n\nДоступные ключи:\nautoResponse, lotsRaise, alwaysOnline, greetingMessage, autoIssue, thankBuyerAfterDelivery, customGreetings', this.mainKeyboard.reply());
+            }
+            const key = parts[1];
+            const value = parts.slice(2).join(' ');
+            const allowedKeys = ['autoResponse', 'lotsRaise', 'alwaysOnline', 'greetingMessage', 'autoIssue', 'thankBuyerAfterDelivery', 'customGreetings', 'newMessageNotification', 'newOrderNotification'];
+
+            if (!allowedKeys.includes(key)) {
+                return ctx.reply(`❌ Ключ "${key}" не разрешён.\n\nДоступные: ${allowedKeys.join(', ')}`, this.mainKeyboard.reply());
+            }
+
+            const oldValue = global.settings[key];
+            global.settings[key] = isNaN(Number(value)) ? value : Number(value);
+            ctx.reply(`⚙️ <b>Настройка изменена:</b>\n<code>${key}</code>: ${oldValue} → ${global.settings[key]}`, { parse_mode: 'HTML' });
+            log(`⚙️ Настройка ${key} изменена: ${oldValue} → ${global.settings[key]}`, 'g');
+        } catch (err) {
+            ctx.reply(`❌ Ошибка: ${err}`, this.mainKeyboard.reply());
+        }
+    }
+
+    async sendBalanceChart(ctx) {
+        try {
+            const history = global.balanceHistory || [];
+            if (history.length < 2) {
+                return ctx.reply('📈 Недостаточно данных для графика. Подождите, пока накопится история баланса.', this.mainKeyboard.reply());
+            }
+
+            const values = history.map(h => h.v);
+            const min = Math.min(...values);
+            const max = Math.max(...values);
+            const range = max - min || 1;
+            const HEIGHT = 10;
+            const WIDTH = Math.min(values.length, 40);
+
+            // Сэмплирование если точек больше чем ширина
+            const sampled = [];
+            const step = values.length / WIDTH;
+            for (let i = 0; i < WIDTH; i++) {
+                sampled.push(values[Math.floor(i * step)]);
+            }
+
+            // ASCII-график
+            let chart = `📈 Баланс за ${history.length} точек\n`;
+            chart += `Max: ${max.toFixed(0)} ₽\n\n`;
+
+            for (let row = HEIGHT; row >= 0; row--) {
+                const threshold = min + (range * row / HEIGHT);
+                let line = '';
+                for (let col = 0; col < sampled.length; col++) {
+                    line += sampled[col] >= threshold ? '█' : ' ';
+                }
+                chart += `${line}\n`;
+            }
+
+            chart += '─'.repeat(sampled.length) + '\n';
+            chart += `Min: ${min.toFixed(0)} ₽ | Сейчас: ${values[values.length - 1].toFixed(0)} ₽`;
+
+            const first = history[0];
+            const last = history[history.length - 1];
+            const diff = last.v - first.v;
+            const emoji = diff >= 0 ? '📈' : '📉';
+            chart += `\n${emoji} Изменение: ${diff >= 0 ? '+' : ''}${diff.toFixed(0)} ₽`;
+
+            ctx.reply(`<pre>${chart}</pre>`, { parse_mode: 'HTML' });
+        } catch (err) {
+            ctx.reply(`❌ Ошибка графика: ${err}`, this.mainKeyboard.reply());
         }
     }
 

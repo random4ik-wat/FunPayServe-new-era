@@ -64,6 +64,21 @@ async function checkForNewOrders() {
 
             log(`Новый заказ ${c.yellowBright(order.id)} от покупателя ${c.yellowBright(order.buyerName)} на сумму ${c.yellowBright(order.price)} ₽.`);
 
+            // Предупреждение о подозрительном покупателе (0 отзывов)
+            try {
+                const buyerPage = await fetch(`https://funpay.com/users/${order.buyerId}/`, { method: 'GET' });
+                const buyerHtml = await buyerPage.text();
+                const buyerDoc = parseDOM(buyerHtml);
+                const reviewsEl = buyerDoc.querySelector('.mr-list-score');
+                const reviewCount = reviewsEl ? parseInt(reviewsEl.textContent) || 0 : 0;
+                if (reviewCount === 0 && global.telegramBot) {
+                    global.telegramBot.sendDisputeAlert({
+                        user: 'СИСТЕМА',
+                        content: `⚠️ Покупатель ${order.buyerName} имеет 0 отзывов. Заказ #${order.id} на ${order.price} ₽. Будьте внимательны!`
+                    });
+                }
+            } catch (_) { /* не критично */ }
+
             let allIssued = true;
             for (let i = 0; i < order.count; i++) {
                 const issueResult = await issueGood(order.buyerId, order.buyerName, order.name, 'id');
@@ -106,13 +121,9 @@ async function issueGood(buyerIdOrNode, buyerName, goodName, type = 'id') {
                         let notInStock = true;
 
                         for (let j = 0; j < goods[i].nodes.length; j++) {
-                            let nodeIndex = 0;
-                            if (global.settings.randomDelivery && goods[i].nodes.length > 1) {
-                                nodeIndex = Math.floor(Math.random() * goods[i].nodes.length);
-                            }
-                            const node = goods[i].nodes[nodeIndex];
+                            const node = goods[i].nodes[j];
 
-                            goods[i].nodes.splice(nodeIndex, 1);
+                            goods[i].nodes.shift();
                             await updateFile(goods, goodsfilePath);
                             message = node;
                             notInStock = false;
