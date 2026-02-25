@@ -39,6 +39,18 @@ function levenshtein(a, b) {
     return dp[a.length][b.length];
 }
 
+// Динамический watermark: {uptime}, {sales}, {balance}
+function resolveWatermark(text) {
+    if (!text) return text;
+    const uptime = global.startTime ? Math.floor((Date.now() - global.startTime) / 3600000) + 'ч' : '0ч';
+    const sales = global.deliveryStats?.count || 0;
+    const balance = global.appData?.balance || '0';
+    return text
+        .replace(/\{uptime\}/gi, uptime)
+        .replace(/\{sales\}/gi, sales)
+        .replace(/\{balance\}/gi, balance);
+}
+
 function enableAutoResponse() {
     log(`Автоответ запущен.`, 'g');
 }
@@ -303,7 +315,7 @@ async function sendMessage(node, message, customNode = false, useWatermark = tru
 
         let reqMessage = message;
         if (useWatermark && settings.watermark && settings.watermark != '') {
-            reqMessage = `${settings.watermark}\n${message}`;
+            reqMessage = `${resolveWatermark(settings.watermark)}\n${message}`;
         }
 
         const request = {

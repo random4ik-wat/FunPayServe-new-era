@@ -74,8 +74,13 @@ function log(msg, color = 'w') {
 
 function maskSecrets(text) {
     if (typeof text !== 'string') return text;
-    // Маскируем golden_key
-    return text.replace(/golden_key[=:][\s]?[\w-]+/gi, 'golden_key=***HIDDEN***');
+    // golden_key
+    text = text.replace(/golden_key[=:]\s?[\w-]+/gi, 'golden_key=***HIDDEN***');
+    // Telegram bot token (цифры:буквы)
+    text = text.replace(/\b\d{8,10}:[A-Za-z0-9_-]{30,50}\b/g, '***TG_TOKEN***');
+    // API ключи (длинные hex/base64 строки >20 символов)
+    text = text.replace(/(?:apiKey|api_key|X-API-Key)[=:]\s?[\w-]{20,}/gi, (m) => m.split(/[=:]/)[0] + '=***HIDDEN***');
+    return text;
 }
 
 function getDate() {

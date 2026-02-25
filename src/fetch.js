@@ -23,6 +23,11 @@ if (settings.proxy.useProxy == true) {
 
 // FETCH FUNCTION
 export default async function fetch_(url, options, delay = 0, retries = 20) {
+    // Mock режим — не делаем реальных запросов
+    if (settings.mockMode) {
+        log(`🧪 [MOCK] ${options?.method || 'GET'} ${url}`, 'y');
+        return { text: async () => '<html><body data-app-data=\'{"userId":0,"csrf-token":"mock"}\'><span class="user-link-name">MockUser</span></body></html>', ok: true, status: 200, headers: { get: () => 'PHPSESSID=mock' } };
+    }
     try {
         let tries = 1;
         if (retriesErrCounter > 5) {

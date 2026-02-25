@@ -1,3 +1,9 @@
+// CLI Wizard — первый запуск
+import { isFirstRun, runWizard } from './wizard.js';
+if (await isFirstRun()) {
+    await runWizard();
+}
+
 await import('./modules.js');
 
 // MODULES

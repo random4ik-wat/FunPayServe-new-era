@@ -786,34 +786,75 @@ class TelegramBot {
 
     async onUploadDeliveryFile(ctx) {
         let file = ctx.update.message.document;
+        if (!file) {
+            // Если прислали текст вместо файла — это имя лота для привязки txt
+            if (this._pendingTxtLines && ctx.update.message.text) {
+                const lotName = ctx.update.message.text.trim();
+                try {
+                    const goods = await load('data/configs/delivery.json') || [];
+                    let found = false;
+                    for (let g of goods) {
+                        if (g.name === lotName) {
+                            if (!g.nodes) g.nodes = [];
+                            g.nodes.push(...this._pendingTxtLines);
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        goods.push({ name: lotName, nodes: this._pendingTxtLines });
+                    }
+                    await updateFile(goods, 'data/configs/delivery.json');
+                    ctx.reply(`✅ Добавлено ${this._pendingTxtLines.length} товаров в лот "${lotName}".`, this.mainKeyboard.reply());
+                } catch (e) {
+                    ctx.reply(`❌ Ошибка: ${e}`, this.mainKeyboard.reply());
+                }
+                this._pendingTxtLines = null;
+                this.waitingForDeliveryFile = false;
+                return;
+            }
+            ctx.reply('❌ Пришлите файл (.json или .txt).', this.mainKeyboard.reply());
+            return;
+        }
+
         let file_id = file.file_id;
         let file_name = file.file_name;
-        let contents = null;
 
-        if (file_name != 'delivery.json') {
-            ctx.reply(`❌ Неверный формат файла.`, this.mainKeyboard.reply());
+        const isTxt = file_name.endsWith('.txt');
+        const isJson = file_name === 'delivery.json';
+
+        if (!isTxt && !isJson) {
+            ctx.reply(`❌ Поддерживаются только .json и .txt файлы.`, this.mainKeyboard.reply());
             return;
         }
 
         try {
             ctx.reply(`♻️ Загружаю файл...`);
-
             let file_path = await this.bot.telegram.getFileLink(file_id);
             let fileContents = await fetch(file_path);
-            contents = await fileContents.text();
-        } catch (e) {
-            ctx.reply(`❌ Не удалось загрузить файл.`, this.mainKeyboard.reply());
-            return;
-        }
+            let contents = await fileContents.text();
 
-        try {
-            ctx.reply(`♻️ Проверяю валидность...`);
-
-            let json = JSON.parse(contents);
-            await updateFile(json, 'data/configs/delivery.json');
-            ctx.reply(`✔️ Окей, обновил файл автовыдачи.`, this.editGoodsKeyboard.reply());
+            if (isJson) {
+                ctx.reply(`♻️ Проверяю валидность...`);
+                let json = JSON.parse(contents);
+                await updateFile(json, 'data/configs/delivery.json');
+                ctx.reply(`✔️ Окей, обновил файл автовыдачи.`, this.editGoodsKeyboard.reply());
+                this.waitingForDeliveryFile = false;
+            } else {
+                // .txt — каждая строка = 1 товар
+                const lines = contents.split('\n').map(l => l.trim()).filter(Boolean);
+                if (lines.length === 0) {
+                    ctx.reply('❌ Файл пустой.', this.mainKeyboard.reply());
+                    this.waitingForDeliveryFile = false;
+                    return;
+                }
+                this._pendingTxtLines = lines;
+                ctx.reply(`📦 Загружено ${lines.length} строк.\n\nНапишите название лота, к которому привязать эти товары:`, this.backKeyboard.reply());
+                // Остаёмся в waitingForDeliveryFile — ждём имя лота
+            }
         } catch (e) {
-            ctx.reply(`❌ Неверный формат JSON.`, this.mainKeyboard.reply());
+            ctx.reply(`❌ Ошибка: ${e}`, this.mainKeyboard.reply());
+            this.waitingForDeliveryFile = false;
         }
     }
 
