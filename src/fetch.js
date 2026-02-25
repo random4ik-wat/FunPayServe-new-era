@@ -11,6 +11,10 @@ const FETCH_TIMEOUT_MS = 15000;
 const MIN_FETCH_INTERVAL = 1000; // Минимум 1с между запросами (rate limiter)
 let lastFetchTime = 0;
 
+// Кеш GET-запросов (TTL 30 сек)
+const requestCache = new Map();
+const CACHE_TTL = 30000;
+
 // PROXY
 if (settings.proxy.useProxy == true) {
     if (!settings.proxy.type || !settings.proxy.host) {
@@ -28,6 +32,16 @@ export default async function fetch_(url, options, delay = 0, retries = 20) {
         log(`🧪 [MOCK] ${options?.method || 'GET'} ${url}`, 'y');
         return { text: async () => '<html><body data-app-data=\'{"userId":0,"csrf-token":"mock"}\'><span class="user-link-name">MockUser</span></body></html>', ok: true, status: 200, headers: { get: () => 'PHPSESSID=mock' } };
     }
+
+    // Кеш GET-запросов
+    const method = options?.method?.toUpperCase() || 'GET';
+    if (method === 'GET') {
+        const cached = requestCache.get(url);
+        if (cached && (Date.now() - cached.time) < CACHE_TTL) {
+            return { text: async () => cached.body, ok: true, status: 200, headers: cached.headers };
+        }
+    }
+
     try {
         let tries = 1;
         if (retriesErrCounter > 5) {
@@ -87,6 +101,24 @@ export default async function fetch_(url, options, delay = 0, retries = 20) {
         }
 
         retriesErrCounter = 0;
+
+        // Кешируем GET-ответы
+        if (method === 'GET' && res && res.ok) {
+            const origText = res.text.bind(res);
+            let cachedBody = null;
+            res.text = async () => {
+                if (cachedBody !== null) return cachedBody;
+                cachedBody = await origText();
+                requestCache.set(url, { body: cachedBody, time: Date.now(), headers: res.headers });
+                // Очистка старого кеша
+                if (requestCache.size > 100) {
+                    const now = Date.now();
+                    for (const [k, v] of requestCache) { if (now - v.time > CACHE_TTL) requestCache.delete(k); }
+                }
+                return cachedBody;
+            };
+        }
+
         return res;
     } catch (err) {
         // Таймауты не считаются критическими ошибками

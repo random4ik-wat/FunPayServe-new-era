@@ -1,0 +1,17 @@
+[Unit]
+Description=FunPayServer Bot
+After=network.target
+
+[Service]
+Type=simple
+User=funpay
+WorkingDirectory=/opt/funpayserver
+ExecStart=/usr/bin/node src/index.js
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

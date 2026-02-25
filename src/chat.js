@@ -76,6 +76,19 @@ async function processMessages() {
                 continue;
             }
 
+            // VIP-команды — приоритетные ответы для конкретных пользователей
+            const vipData = await load('data/configs/vip.json').catch(() => []);
+            if (vipData && vipData.length > 0) {
+                const vipEntry = vipData.find(v => v.user === chat.userName);
+                if (vipEntry && vipEntry.response) {
+                    log(`VIP ответ для ${c.yellowBright(chat.userName)}.`);
+                    let smRes = await sendMessage(chat.node, resolveSpintax(vipEntry.response), false, useWatermark);
+                    if (smRes) log(`VIP ответ отправлен.`, 'g');
+                    autoRespCooldown.set(chat.userName, Date.now());
+                    matched = true;
+                }
+            }
+
             // Command logic here
 
             // Commands in file

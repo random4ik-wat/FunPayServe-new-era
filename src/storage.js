@@ -168,6 +168,7 @@ function loadConfig() {
         customGreetings: Number(config.get('FunPay', 'customGreetings') || 0),
         randomDelivery: Number(config.get('FunPay', 'randomDelivery') || 0),
         mockMode: Number(config.get('FunPay', 'mockMode') || 0),
+        webhookUrl: config.get('FunPay', 'webhookUrl') || '',
         blacklist: (config.get('FunPay', 'blacklist') || '').split(',').map(s => s.trim()).filter(Boolean),
         telegramBot: Number(config.get('Telegram', 'enabled')),
         telegramToken: config.get('Telegram', 'token') || process.env.FPS_TG_TOKEN || '',

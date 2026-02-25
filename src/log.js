@@ -136,6 +136,15 @@ async function logToFile(msg) {
         }
 
         await fs.appendFile(logFile, `${msg}\n`);
+
+        // JSON-логи (структурированные)
+        const jsonLogFile = logFile.replace('.txt', '.jsonl');
+        const jsonEntry = JSON.stringify({
+            ts: new Date().toISOString(),
+            level: msg.includes('Ошибка') || msg.includes('❌') ? 'error' : msg.includes('⚠') ? 'warn' : 'info',
+            msg: msg.replace(/^>?\[.*?\]\s*\[.*?\]:\s*/, '')
+        });
+        await fs.appendFile(jsonLogFile, jsonEntry + '\n');
     } catch (err) {
         console.log(`Ошибка записи файла: ${err}`);
     }

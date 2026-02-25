@@ -636,6 +636,21 @@ class TelegramBot {
             parse_mode: 'HTML',
             disable_notification: false
         });
+
+        this.sendWebhook('dispute', { user: userName, message: messageText });
+    }
+
+    async sendWebhook(event, data) {
+        const url = global.settings.webhookUrl;
+        if (!url) return;
+        try {
+            const fetch = global.fetch;
+            await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ event, timestamp: Date.now(), data })
+            });
+        } catch (_) { /* webhook не критичен */ }
     }
 
     async sendBalanceChange(oldBalance, newBalance) {
